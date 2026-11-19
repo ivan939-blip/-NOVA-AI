@@ -37,9 +37,9 @@ export async function onRequestPost({ request, env }) {
       temperature: 0.7,
       stream: true,
       chat_template_kwargs: { enable_thinking: false }
-    });
+    }, { rejectIfBusy: true });
 
-    if (!(stream instanceof ReadableStream)) {
+    if (typeof stream?.getReader !== 'function') {
       const rawAnswer = stream?.response
         ?? stream?.choices?.[0]?.message?.content
         ?? stream?.result?.response
