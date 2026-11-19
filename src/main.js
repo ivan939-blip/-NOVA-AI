@@ -16,7 +16,9 @@ let chatBusy = false;
 let imageBusy = false;
 let imageResult = '';
 let imageError = '';
-let imagePrompt = '';\nlet customCharacters = store.get('nova-characters', []);\nlet activeCharacter = store.get('nova-active-character', null);
+let imagePrompt = '';
+let customCharacters = store.get('nova-characters', []);
+let activeCharacter = store.get('nova-active-character', null);
 
 function esc(t) { const e=document.createElement('div'); e.textContent=t; return e.innerHTML; }
 function icon(n) { return ({chat:'◈',image:'◇',video:'▷',characters:'♙',library:'▣',adult:'18+'})[n]; }
