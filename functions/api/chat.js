@@ -31,14 +31,36 @@ export async function onRequestPost({ request, env }) {
   try {
     const result = await env.AI.run('@cf/zai-org/glm-4.7-flash', {
       messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...messages],
-      max_tokens: 700,
-      temperature: 0.7
+      max_tokens: 900,
+      temperature: 0.7,
+      chat_template_kwargs: { enable_thinking: false }
     });
-    const answer = result?.response?.trim();
-    if (!answer) return json({
-      error: 'AI-модель виконала запит, але повернула порожню відповідь.',
-      code: 'AI_EMPTY_RESPONSE'
-    }, 502);
+
+    // Workers AI chat models may return OpenAI-compatible choices or a
+    // direct response field depending on the binding/model response shape.
+    const rawAnswer = result?.response
+      ?? result?.choices?.[0]?.message?.content
+      ?? result?.result?.response
+      ?? result?.result?.choices?.[0]?.message?.content;
+    const answer = Array.isArray(rawAnswer)
+      ? rawAnswer.map(part => typeof part === 'string' ? part : part?.text || '').join('').trim()
+      : typeof rawAnswer === 'string' ? rawAnswer.trim() : '';
+
+    if (!answer) {
+      console.error('NOVA Workers AI returned no text:', JSON.stringify({
+        keys: result && typeof result === 'object' ? Object.keys(result) : [],
+        finish_reason: result?.choices?.[0]?.finish_reason,
+        has_reasoning: Boolean(result?.reasoning || result?.reasoning_content || result?.choices?.[0]?.message?.reasoning_content)
+      }));
+      return json({
+        error: 'Модель не повернула текст. Перевірено стандартний формат Workers AI та формат choices.',
+        code: 'AI_EMPTY_RESPONSE',
+        diagnostic: {
+          responseKeys: result && typeof result === 'object' ? Object.keys(result) : [],
+          finishReason: result?.choices?.[0]?.finish_reason || null
+        }
+      }, 502);
+    }
     return json({ answer, diagnostic: { status: 'ok', model: '@cf/zai-org/glm-4.7-flash' } });
   } catch (error) {
     console.error('NOVA Workers AI error:', error);
