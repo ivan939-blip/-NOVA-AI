@@ -7,12 +7,13 @@ Mobile-first Gothic Cyberpunk AI Studio. The permanent purple-black heroine home
 - Chat UI with local conversation history.
 - Cloudflare Pages Function for the NOVA chat API.
 - Cloudflare Workers AI integration (no OpenAI key required).
-- Image and video idea drafts saved to the local library.
+- Image generation endpoint is implemented with Cloudflare Workers AI FLUX (deployment/limits must be verified).
+- Video idea drafts saved to the local library; video rendering is not implemented.
 - Character selection and a local 18+ mode toggle.
 - Optional Supabase sign-in and cloud library (requires a free Supabase project).
 - PWA shell and GitHub Pages design preview.
 
-Image and video rendering are not enabled in this free build yet. The Image Studio and Video Studio clearly save concepts only; they do not pretend to render media.
+Image generation is implemented in Image Studio via Cloudflare Pages Functions and Workers AI FLUX. Video Studio currently stores ideas only; actual video rendering is not implemented. Verify deployment and AI binding before relying on generation.
 
 ## Free deployment: Cloudflare Pages + Workers AI
 
