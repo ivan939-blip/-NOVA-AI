@@ -19,3 +19,5 @@ The AI generation buttons deliberately save drafts only. A production AI backend
 ## Free hosting preparation
 
 `.github/workflows/deploy-pages.yml` is ready to deploy on GitHub Pages after the repository's **Settings → Pages → Source** is set to **GitHub Actions**. It does not provision any paid resource.
+
+After the first successful deployment, the app will be available at https://ivan939-blip.github.io/-NOVA-AI/
