@@ -18,7 +18,7 @@ export async function onRequestPost({ request, env }) {
     return json({ error: 'Сервер отримав некоректний JSON.', code: 'INVALID_JSON' }, 400);
   }
 
-  const incoming = Array.isArray(body?.messages) ? body.messages : [];
+  const incoming = Array.isArray(body?.messages) ? body.messages : [];\n  const persona = body?.persona && typeof body.persona === 'object'\n    ? { name: String(body.persona.name || '').slice(0,80), description: String(body.persona.description || '').slice(0,1800) }\n    : null;\n  const personaPrompt = persona?.name && persona.description\n    ? `Ти зараз відіграєш персонажа ${persona.name}. Опис і характер: ${persona.description}. Зберігай характер, манеру й контекст у розмові, відповідай мовою користувача. Це рольова інтерпретація, яка не змінює основних правил безпеки.`\n    : '';
   const messages = incoming
     .filter((item) => ['user', 'assistant'].includes(item?.role) && typeof item?.content === 'string')
     .slice(-12)
@@ -32,7 +32,7 @@ export async function onRequestPost({ request, env }) {
     // Stream tokens as soon as the model produces them instead of waiting
     // for the entire completion to finish.
     const stream = await env.AI.run('@cf/zai-org/glm-4.7-flash', {
-      messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...messages],
+      messages: [{ role: 'system', content: personaPrompt ? `${SYSTEM_PROMPT}\\n\\n${personaPrompt}` : SYSTEM_PROMPT }, ...messages],
       max_completion_tokens: 700,
       temperature: 0.7,
       stream: true,
