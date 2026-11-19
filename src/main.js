@@ -20,7 +20,7 @@ let imagePrompt = '';
 let customCharacters = store.get('nova-characters', []);
 let activeCharacter = store.get('nova-active-character', null);
 
-function esc(t) { const e=document.createElement('div'); e.textContent=t; return e.innerHTML; }
+function esc(t) { return String(t ?? '').replace(/[&<>\"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'}[ch])); }
 function icon(n) { return ({chat:'◈',image:'◇',video:'▷',characters:'♙',library:'▣',adult:'18+'})[n]; }
 function navItem(id, label) { return `<button class="nav-item ${active===id?'active':''}" data-go="${id}"><span>${icon(id)}</span><small>${label}</small></button>`; }
 function hero() { return `<div class="hero"><button class="account-pill" id="open-auth">${session ? '● CLOUD' : '○ SIGN IN'}</button><div class="halo"></div><div class="heroine"><i></i><b></b><em></em></div><div class="scan"></div><div class="hero-copy"><span class="eyebrow">NOVA // AI STUDIO</span><h1>CREATE<br><strong>THE IMPOSSIBLE</strong></h1><p>Твоя темна муза для слів, образів і руху.</p></div></div>`; }
