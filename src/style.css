@@ -7,3 +7,5 @@
 .library-thumb{width:54px;height:54px;object-fit:cover;border-radius:10px;border:1px solid #75428e;flex-shrink:0}.saved:has(.library-thumb){align-items:flex-start}.saved:has(.library-thumb) p{white-space:normal;overflow-wrap:anywhere}
 
 .character-form{margin-top:16px;display:grid;gap:12px}.character-form label input{display:block;width:100%;margin-top:7px;padding:11px;background:#100817;color:#fff;border:1px solid #513066;border-radius:10px;outline:0}.character-form h3{margin:4px 0}.delete-character{display:block;text-align:right;padding:0 12px;color:#c99bdc;font-size:20px}
+
+.active-persona{margin:6px 0 10px;padding:8px 12px;border:1px solid #76439a;background:#21112e;border-radius:12px;color:#e4b9ff;font-size:12px;display:flex;justify-content:space-between;align-items:center}.active-persona button{background:transparent;color:#d4a6eb;font-size:18px}
