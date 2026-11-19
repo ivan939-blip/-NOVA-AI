@@ -1,0 +1,9 @@
+{
+  "name": "NOVA AI — Gothic Cyberpunk Studio",
+  "short_name": "NOVA AI",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#10071d",
+  "theme_color": "#10071d",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}
