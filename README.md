@@ -15,3 +15,7 @@ npm run dev
 ```
 
 The AI generation buttons deliberately save drafts only. A production AI backend, accounts, and cloud library have not yet been connected.
+
+## Free hosting preparation
+
+`.github/workflows/deploy-pages.yml` is ready to deploy on GitHub Pages after the repository's **Settings → Pages → Source** is set to **GitHub Actions**. It does not provision any paid resource.
