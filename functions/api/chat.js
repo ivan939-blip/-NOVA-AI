@@ -21,53 +21,53 @@ export async function onRequestPost({ request, env }) {
   const incoming = Array.isArray(body?.messages) ? body.messages : [];
   const messages = incoming
     .filter((item) => ['user', 'assistant'].includes(item?.role) && typeof item?.content === 'string')
-    .slice(-16)
-    .map((item) => ({ role: item.role, content: item.content.slice(0, 4000) }));
+    .slice(-12)
+    .map((item) => ({ role: item.role, content: item.content.slice(0, 2500) }));
 
   if (!messages.length || messages[messages.length - 1].role !== 'user') {
     return json({ error: 'Повідомлення користувача не знайдено.', code: 'MESSAGE_REQUIRED' }, 400);
   }
 
   try {
-    const result = await env.AI.run('@cf/zai-org/glm-4.7-flash', {
+    // Stream tokens as soon as the model produces them instead of waiting
+    // for the entire completion to finish.
+    const stream = await env.AI.run('@cf/zai-org/glm-4.7-flash', {
       messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...messages],
-      max_tokens: 900,
+      max_completion_tokens: 700,
       temperature: 0.7,
+      stream: true,
       chat_template_kwargs: { enable_thinking: false }
     });
 
-    // Workers AI chat models may return OpenAI-compatible choices or a
-    // direct response field depending on the binding/model response shape.
-    const rawAnswer = result?.response
-      ?? result?.choices?.[0]?.message?.content
-      ?? result?.result?.response
-      ?? result?.result?.choices?.[0]?.message?.content;
-    const answer = Array.isArray(rawAnswer)
-      ? rawAnswer.map(part => typeof part === 'string' ? part : part?.text || '').join('').trim()
-      : typeof rawAnswer === 'string' ? rawAnswer.trim() : '';
-
-    if (!answer) {
-      console.error('NOVA Workers AI returned no text:', JSON.stringify({
-        keys: result && typeof result === 'object' ? Object.keys(result) : [],
-        finish_reason: result?.choices?.[0]?.finish_reason,
-        has_reasoning: Boolean(result?.reasoning || result?.reasoning_content || result?.choices?.[0]?.message?.reasoning_content)
-      }));
-      return json({
-        error: 'Модель не повернула текст. Перевірено стандартний формат Workers AI та формат choices.',
+    if (!(stream instanceof ReadableStream)) {
+      const rawAnswer = stream?.response
+        ?? stream?.choices?.[0]?.message?.content
+        ?? stream?.result?.response
+        ?? stream?.result?.choices?.[0]?.message?.content;
+      const answer = Array.isArray(rawAnswer)
+        ? rawAnswer.map(part => typeof part === 'string' ? part : part?.text || '').join('').trim()
+        : typeof rawAnswer === 'string' ? rawAnswer.trim() : '';
+      if (!answer) return json({
+        error: 'Модель не повернула текстову відповідь.',
         code: 'AI_EMPTY_RESPONSE',
-        diagnostic: {
-          responseKeys: result && typeof result === 'object' ? Object.keys(result) : [],
-          finishReason: result?.choices?.[0]?.finish_reason || null
-        }
+        diagnostic: { responseKeys: stream && typeof stream === 'object' ? Object.keys(stream) : [] }
       }, 502);
+      return json({ answer });
     }
-    return json({ answer, diagnostic: { status: 'ok', model: '@cf/zai-org/glm-4.7-flash' } });
+
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'text/event-stream; charset=utf-8',
+        'Cache-Control': 'no-cache, no-transform',
+        'X-Accel-Buffering': 'no'
+      }
+    });
   } catch (error) {
     console.error('NOVA Workers AI error:', error);
     return json({
-      error: 'Cloudflare Workers AI не зміг виконати запит. Перевір binding AI, доступність моделі та ліміти.',
+      error: 'Cloudflare Workers AI не зміг виконати запит. Перевір доступність моделі та ліміти.',
       code: 'AI_RUN_FAILED',
-      diagnostic: { errorName: error?.name || 'UnknownError' }
+      diagnostic: { errorName: error?.name || 'UnknownError', errorMessage: String(error?.message || '').slice(0, 240) }
     }, 502);
   }
 }
