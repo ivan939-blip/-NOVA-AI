@@ -18,7 +18,7 @@ export async function onRequestPost({ request, env }) {
     return json({ error: 'Сервер отримав некоректний JSON.', code: 'INVALID_JSON' }, 400);
   }
 
-  const incoming = Array.isArray(body?.messages) ? body.messages : [];
+  const messages = Array.isArray(body?.messages) ? body.messages : [];
   const persona = body?.persona && typeof body.persona === 'object'
     ? { name: String(body.persona.name || '').slice(0,80), description: String(body.persona.description || '').slice(0,1800) }
     : null;
