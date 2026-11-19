@@ -31,7 +31,8 @@ async function askNOVA(text) {
   chatBusy=true;
   render();
   const controller=new AbortController();
-  const timeout=setTimeout(()=>controller.abort(),35000);
+  const timeout=setTimeout(()=>controller.abort(),90000);
+  let reply=null;
   try {
     const history=messages
       .filter((m,i)=>!(i===0&&m.role==='nova')&&!(i===messages.length-1&&m.role==='user'&&m.text===text))
@@ -42,26 +43,69 @@ async function askNOVA(text) {
       body:JSON.stringify({messages:[...history,{role:'user',content:text}]}),
       signal:controller.signal
     });
-    const raw=await result.text();
-    let data;
-    try { data=JSON.parse(raw); }
-    catch {
-      throw new Error(`Сервер повернув не JSON (HTTP ${result.status}). Перевір адресу API та розгортання Cloudflare Pages.`);
+
+    if(!result.ok) {
+      const raw=await result.text();
+      let data;
+      try { data=JSON.parse(raw); } catch { data={error:raw}; }
+      throw new Error(`${data.code || `HTTP_${result.status}`}: ${data.error || 'Сервер не повернув відповідь.'}`);
     }
-    if(!result.ok || !data.answer) {
-      const code=data.code || `HTTP_${result.status}`;
-      const detail=data.error || 'Сервер не повернув текст відповіді.';
-      messages.push({role:'nova',text:`ДІАГНОСТИКА: ${code} (HTTP ${result.status}). ${detail}`});
+
+    const contentType=result.headers.get('content-type') || '';
+    if(contentType.includes('text/event-stream') && result.body) {
+      reply={role:'nova',text:''};
+      messages.push(reply);
+      render();
+      const replyEl=document.querySelector('.messages .message.nova:last-child');
+      const reader=result.body.getReader();
+      const decoder=new TextDecoder();
+      let buffer='';
+
+      const addChunk=(chunk)=>{
+        if(!chunk) return;
+        reply.text+=chunk;
+        if(replyEl) replyEl.textContent=reply.text;
+      };
+      const parseEvent=(event)=>{
+        const data=event.split(/\r?\n/).filter(line=>line.startsWith('data:')).map(line=>line.slice(5).trim()).join('\n');
+        if(!data || data==='[DONE]') return;
+        try {
+          const packet=JSON.parse(data);
+          const delta=packet?.choices?.[0]?.delta?.content
+            ?? packet?.choices?.[0]?.message?.content
+            ?? packet?.response
+            ?? '';
+          if(Array.isArray(delta)) addChunk(delta.map(part=>typeof part==='string'?part:part?.text||'').join(''));
+          else if(typeof delta==='string') addChunk(delta);
+        } catch {
+          // Ignore non-JSON keep-alive/event frames.
+        }
+      };
+
+      while(true) {
+        const {value,done}=await reader.read();
+        if(done) break;
+        buffer+=decoder.decode(value,{stream:true});
+        const events=buffer.split(/\r?\n\r?\n/);
+        buffer=events.pop() || '';
+        events.forEach(parseEvent);
+      }
+      buffer+=decoder.decode();
+      if(buffer.trim()) parseEvent(buffer);
+      if(!reply.text.trim()) reply.text='Модель завершила запит, але не надіслала текстових фрагментів.';
     } else {
+      const data=await result.json();
+      if(!data.answer) throw new Error(data.error || 'Сервер не повернув текст відповіді.');
       messages.push({role:'nova',text:data.answer});
     }
   } catch(error) {
     const detail=error?.name==='AbortError'
-      ? 'Час очікування вичерпано (35 секунд). AI-сервер не відповів вчасно.'
+      ? 'Час очікування вичерпано (90 секунд). Потік AI-сервера не завершився.'
       : error?.message?.includes('Failed to fetch')
         ? 'Не вдалося з’єднатися з /api/chat. Перевір інтернет і адресу розгортання.'
-        : `Помилка запиту: ${error?.message || 'невідома помилка'}`;
-    messages.push({role:'nova',text:`ДІАГНОСТИКА: FRONTEND_REQUEST_FAILED. ${detail}`});
+        : `Помилка AI: ${error?.message || 'невідома помилка'}`;
+    if(reply) reply.text=reply.text ? `${reply.text}\n\nДІАГНОСТИКА: ${detail}` : `ДІАГНОСТИКА: ${detail}`;
+    else messages.push({role:'nova',text:`ДІАГНОСТИКА: FRONTEND_REQUEST_FAILED. ${detail}`});
   } finally {
     clearTimeout(timeout);
     chatBusy=false;
