@@ -6,13 +6,16 @@ const json = (body, status = 200) => Response.json(body, {
 });
 
 export async function onRequestPost({ request, env }) {
-  if (!env.AI) return json({ error: 'AI binding is not configured.' }, 503);
+  if (!env.AI) return json({
+    error: 'AI-ядро не підключене до Cloudflare Pages.',
+    code: 'AI_BINDING_MISSING'
+  }, 503);
 
   let body;
   try {
     body = await request.json();
   } catch {
-    return json({ error: 'Invalid JSON body.' }, 400);
+    return json({ error: 'Сервер отримав некоректний JSON.', code: 'INVALID_JSON' }, 400);
   }
 
   const incoming = Array.isArray(body?.messages) ? body.messages : [];
@@ -22,7 +25,7 @@ export async function onRequestPost({ request, env }) {
     .map((item) => ({ role: item.role, content: item.content.slice(0, 4000) }));
 
   if (!messages.length || messages[messages.length - 1].role !== 'user') {
-    return json({ error: 'A user message is required.' }, 400);
+    return json({ error: 'Повідомлення користувача не знайдено.', code: 'MESSAGE_REQUIRED' }, 400);
   }
 
   try {
@@ -32,11 +35,18 @@ export async function onRequestPost({ request, env }) {
       temperature: 0.7
     });
     const answer = result?.response?.trim();
-    if (!answer) return json({ error: 'NOVA returned an empty response.' }, 502);
-    return json({ answer });
+    if (!answer) return json({
+      error: 'AI-модель виконала запит, але повернула порожню відповідь.',
+      code: 'AI_EMPTY_RESPONSE'
+    }, 502);
+    return json({ answer, diagnostic: { status: 'ok', model: '@cf/zai-org/glm-4.7-flash' } });
   } catch (error) {
     console.error('NOVA Workers AI error:', error);
-    return json({ error: 'NOVA is temporarily unavailable. Check the Workers AI binding and free quota.' }, 502);
+    return json({
+      error: 'Cloudflare Workers AI не зміг виконати запит. Перевір binding AI, доступність моделі та ліміти.',
+      code: 'AI_RUN_FAILED',
+      diagnostic: { errorName: error?.name || 'UnknownError' }
+    }, 502);
   }
 }
 
