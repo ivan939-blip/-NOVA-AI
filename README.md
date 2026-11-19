@@ -57,5 +57,5 @@ npm run build
 To run Pages Functions locally with the AI binding, use Wrangler and authenticate with a Cloudflare account:
 
 ```bash
-npx wrangler pages dev dist
+npx wrangler pages dev dist --ai AI
 ```
