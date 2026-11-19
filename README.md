@@ -21,7 +21,7 @@ The repository contains a Cloudflare Pages config (`wrangler.toml`) and Pages Fu
 1. Create a free account at [Cloudflare](https://dash.cloudflare.com/).
 2. Open **Workers & Pages → Create → Pages → Connect to Git** and select `ivan939-blip/-NOVA-AI`.
 3. Set the production branch to `main`, framework preset to **Vite**, build command to `npm run build`, and build output directory to `dist`.
-4. After the first deployment, open the Pages project **Settings → Functions → Workers AI** and add a binding named exactly `AI`.
+4. The repository's `wrangler.toml` already declares the Workers AI binding as `AI`. Because this file is the configuration source of truth, make sure the Pages project deploys with Wrangler configuration enabled and check **Settings → Bindings** if the binding is not shown.
 5. Redeploy the project. Open `https://YOUR-PROJECT.pages.dev/api/health`. It should return JSON with `"ai": true`.
 6. Open the site and test the Chat tab.
 
