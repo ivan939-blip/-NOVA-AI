@@ -27,7 +27,48 @@ function adultView() { return `<section class="screen adult"><div class="adult-m
 function content(){ return ({chat,image:imageStudio,video:videoStudio,characters,library:libraryView,adult:adultView})[active](); }
 function authModal(){return `<div class="modal-backdrop"><section class="auth-modal"><button class="modal-close" id="close-auth">×</button><span class="eyebrow">NOVA IDENTITY</span><h2>${session ? 'Твій профіль' : 'Увійти до NOVA'}</h2>${session?`<p>${esc(session.user.email)}</p><button class="secondary" id="sign-out">Вийти</button>`:isCloudReady?`<p>Увійди або створи акаунт, щоб синхронізувати бібліотеку.</p><form id="auth-form"><input type="email" id="auth-email" placeholder="Email" required/><input type="password" id="auth-password" placeholder="Пароль (мін. 6 символів)" minlength="6" required/><button class="primary">Продовжити</button></form><p class="notice">${authNotice || 'Новий email автоматично отримає посилання для підтвердження.'}</p>`:`<p>Хмарний обліковий запис ще не налаштований для цього deployment.</p><p class="notice">Хмарний вхід запрацює після підключення безкоштовного проєкту Supabase.</p>`}</section></div>`;}
 function render(){ $('#app').innerHTML=`<main class="app-shell">${content()}<nav>${navItem('chat','Chat')}${navItem('image','Images')}${navItem('video','Video')}${navItem('characters','Souls')}${navItem('library','Library')}${navItem('adult','18+')}</nav></main>`; bind(); }
-async function askNOVA(text) { chatBusy=true; render(); try { const history=messages.filter((m,i)=>!(i===0&&m.role==='nova')&&!(i===messages.length-1&&m.role==='user'&&m.text===text)).map(m=>({role:m.role==='nova'?'assistant':'user',content:m.text})); const result=await fetch(`${import.meta.env.BASE_URL}api/chat`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({messages:[...history,{role:'user',content:text}]})}); const data=await result.json(); messages.push({role:'nova',text:data.answer || (data.error==='AI binding is not configured.'?'AI-ядро ще не підключене. У Cloudflare Pages додай Workers AI binding з назвою AI та повтори спробу.':data.error || 'NOVA тимчасово не може відповісти.')}); } catch { messages.push({role:'nova',text:'З’єднання з AI-ядром недоступне. Спробуй ще раз пізніше.'}); } finally { chatBusy=false;store.set('nova-messages',messages);render(); } }
+async function askNOVA(text) {
+  chatBusy=true;
+  render();
+  const controller=new AbortController();
+  const timeout=setTimeout(()=>controller.abort(),35000);
+  try {
+    const history=messages
+      .filter((m,i)=>!(i===0&&m.role==='nova')&&!(i===messages.length-1&&m.role==='user'&&m.text===text))
+      .map(m=>({role:m.role==='nova'?'assistant':'user',content:m.text}));
+    const result=await fetch(`${import.meta.env.BASE_URL}api/chat`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({messages:[...history,{role:'user',content:text}]}),
+      signal:controller.signal
+    });
+    const raw=await result.text();
+    let data;
+    try { data=JSON.parse(raw); }
+    catch {
+      throw new Error(`Сервер повернув не JSON (HTTP ${result.status}). Перевір адресу API та розгортання Cloudflare Pages.`);
+    }
+    if(!result.ok || !data.answer) {
+      const code=data.code || `HTTP_${result.status}`;
+      const detail=data.error || 'Сервер не повернув текст відповіді.';
+      messages.push({role:'nova',text:`ДІАГНОСТИКА: ${code} (HTTP ${result.status}). ${detail}`});
+    } else {
+      messages.push({role:'nova',text:data.answer});
+    }
+  } catch(error) {
+    const detail=error?.name==='AbortError'
+      ? 'Час очікування вичерпано (35 секунд). AI-сервер не відповів вчасно.'
+      : error?.message?.includes('Failed to fetch')
+        ? 'Не вдалося з’єднатися з /api/chat. Перевір інтернет і адресу розгортання.'
+        : `Помилка запиту: ${error?.message || 'невідома помилка'}`;
+    messages.push({role:'nova',text:`ДІАГНОСТИКА: FRONTEND_REQUEST_FAILED. ${detail}`});
+  } finally {
+    clearTimeout(timeout);
+    chatBusy=false;
+    store.set('nova-messages',messages);
+    render();
+  }
+}
 async function saveDraft(type, text) { const item={type,text,date:new Intl.DateTimeFormat('uk-UA',{day:'2-digit',month:'short'}).format(new Date())}; library.unshift(item);store.set('nova-library',library);if(session&&supabase){const {error}=await supabase.from('library_items').insert({user_id:session.user.id,type,prompt:text});if(error) console.error('Cloud library save failed',error);}}
 async function loadCloudLibrary(){if(!session||!supabase)return;const {data,error}=await supabase.from('library_items').select('type,prompt,created_at').order('created_at',{ascending:false});if(!error&&data){library=data.map(x=>({type:x.type,text:x.prompt,date:new Intl.DateTimeFormat('uk-UA',{day:'2-digit',month:'short'}).format(new Date(x.created_at))}));store.set('nova-library',library);}}
 function bind(){ document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>{active=b.dataset.go;render();}); $('#chat-form')?.addEventListener('submit',async e=>{e.preventDefault();const input=$('#chat-input'),text=input.value.trim();if(!text||chatBusy)return;messages.push({role:'user',text});store.set('nova-messages',messages);await askNOVA(text);}); $('#clear-chat')?.addEventListener('click',()=>{messages=messages.slice(0,1);store.set('nova-messages',messages);render();}); document.querySelectorAll('[data-draft]').forEach(b=>b.onclick=async()=>{const type=b.dataset.draft,text=$(`#${type}-prompt`).value.trim();if(!text)return;await saveDraft(type,text);b.textContent='✓ Збережено до Library';}); document.querySelectorAll('[data-remove]').forEach(b=>b.onclick=()=>{library.splice(+b.dataset.remove,1);store.set('nova-library',library);render();}); $('#enable-adult')?.addEventListener('click',()=>{adult=true;store.set('nova-adult',true);render();}); $('#disable-adult')?.addEventListener('click',()=>{adult=false;store.set('nova-adult',false);render();}); document.querySelectorAll('[data-character]').forEach(b=>b.onclick=()=>{active='chat';messages.push({role:'nova',text:`Зв’язок із ${b.dataset.character} встановлено. Я готова слухати.`});store.set('nova-messages',messages);render();}); $('#open-auth')?.addEventListener('click',()=>{$('#app').insertAdjacentHTML('beforeend',authModal());bindAuth();}); }
