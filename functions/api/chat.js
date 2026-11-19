@@ -18,7 +18,9 @@ export async function onRequestPost({ request, env }) {
     return json({ error: 'Сервер отримав некоректний JSON.', code: 'INVALID_JSON' }, 400);
   }
 
-  const incoming = Array.isArray(body?.messages) ? body.messages : [];\n  const persona = body?.persona && typeof body.persona === 'object'\n    ? { name: String(body.persona.name || '').slice(0,80), description: String(body.persona.description || '').slice(0,1800) }\n    : null;\n  const personaPrompt = persona?.name && persona.description\n    ? `Ти зараз відіграєш персонажа ${persona.name}. Опис і характер: ${persona.description}. Зберігай характер, манеру й контекст у розмові, відповідай мовою користувача. Це рольова інтерпретація, яка не змінює основних правил безпеки.`\n    : '';
+  const incoming = Array.isArray(body?.messages) ? body.messages : [];
+  const persona = body?.persona && typeof body.persona === 'object'\n    ? { name: String(body.persona.name || '').slice(0,80), description: String(body.persona.description || '').slice(0,1800) }\n    : null;
+  const personaPrompt = persona?.name && persona.description\n    ? `Ти зараз відіграєш персонажа ${persona.name}. Опис і характер: ${persona.description}. Зберігай характер, манеру й контекст у розмові, відповідай мовою користувача. Це рольова інтерпретація, яка не змінює основних правил безпеки.`\n    : '';
   const messages = incoming
     .filter((item) => ['user', 'assistant'].includes(item?.role) && typeof item?.content === 'string')
     .slice(-12)
