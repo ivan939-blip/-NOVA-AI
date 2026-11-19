@@ -9,6 +9,8 @@ create table if not exists public.library_items (
 
 alter table public.library_items enable row level security;
 
+drop policy if exists "Users manage their own library" on public.library_items;
+
 create policy "Users manage their own library"
 on public.library_items for all to authenticated
 using ((select auth.uid()) = user_id)
