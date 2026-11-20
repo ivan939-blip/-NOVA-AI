@@ -32,48 +32,38 @@ export async function onRequestPost({ request, env }) {
     return json({ error: 'Повідомлення користувача не знайдено.', code: 'MESSAGE_REQUIRED' }, 400);
   }
 
-  try {
-    // Stream tokens as soon as the model produces them instead of waiting
-    // for the entire completion to finish.
-    const stream = await env.AI.run('@cf/zai-org/glm-4.7-flash', {
-      messages: [{ role: 'system', content: personaPrompt ? `${SYSTEM_PROMPT}\n\n${personaPrompt}` : SYSTEM_PROMPT }, ...messages],
-      max_completion_tokens: 700,
-      temperature: 0.7,
-      stream: true,
-      chat_template_kwargs: { enable_thinking: false }
-    }, { rejectIfBusy: true });
+  const modelMessages = [{ role: 'system', content: personaPrompt ? `${SYSTEM_PROMPT}\n\n${personaPrompt}` : SYSTEM_PROMPT }, ...messages];
+  const models = ['@cf/zai-org/glm-4.7-flash', '@cf/meta/llama-3.1-8b-instruct'];
+  let lastError;
 
-    if (typeof stream?.getReader !== 'function') {
-      const rawAnswer = stream?.response
-        ?? stream?.choices?.[0]?.message?.content
-        ?? stream?.result?.response
-        ?? stream?.result?.choices?.[0]?.message?.content;
-      const answer = Array.isArray(rawAnswer)
-        ? rawAnswer.map(part => typeof part === 'string' ? part : part?.text || '').join('').trim()
-        : typeof rawAnswer === 'string' ? rawAnswer.trim() : '';
-      if (!answer) return json({
-        error: 'Модель не повернула текстову відповідь.',
-        code: 'AI_EMPTY_RESPONSE',
-        diagnostic: { responseKeys: stream && typeof stream === 'object' ? Object.keys(stream) : [] }
-      }, 502);
-      return json({ answer });
-    }
-
-    return new Response(stream, {
-      headers: {
-        'Content-Type': 'text/event-stream; charset=utf-8',
-        'Cache-Control': 'no-cache, no-transform',
-        'X-Accel-Buffering': 'no'
+  for (const model of models) {
+    try {
+      const result = await env.AI.run(model, {
+        messages: modelMessages,
+        max_completion_tokens: 700,
+        temperature: 0.7,
+        stream: true,
+        chat_template_kwargs: { enable_thinking: false }
+      });
+      if (typeof result?.getReader === 'function') {
+        return new Response(result, {
+          headers: { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-cache, no-transform', 'X-Accel-Buffering': 'no' }
+        });
       }
-    });
-  } catch (error) {
-    console.error('NOVA Workers AI error:', error);
-    return json({
-      error: 'Cloudflare Workers AI не зміг виконати запит. Перевір доступність моделі та ліміти.',
-      code: 'AI_RUN_FAILED',
-      diagnostic: { errorName: error?.name || 'UnknownError', errorMessage: String(error?.message || '').slice(0, 240) }
-    }, 502);
+      const rawAnswer = result?.response ?? result?.choices?.[0]?.message?.content ?? result?.result?.response ?? result?.result?.choices?.[0]?.message?.content;
+      const answer = Array.isArray(rawAnswer) ? rawAnswer.map(part => typeof part === 'string' ? part : part?.text || '').join('').trim() : typeof rawAnswer === 'string' ? rawAnswer.trim() : '';
+      if (answer) return json({ answer });
+      lastError = new Error('AI_EMPTY_RESPONSE');
+    } catch (error) {
+      lastError = error;
+      console.error('NOVA AI model failed:', model, error);
+    }
   }
+  return json({
+    error: 'Не вдалося отримати відповідь від основної або резервної AI-моделі. Можливо, сервіс тимчасово недоступний або вичерпано ліміт.',
+    code: 'AI_RUN_FAILED',
+    diagnostic: { errorName: lastError?.name || 'UnknownError', errorMessage: String(lastError?.message || '').slice(0, 240) }
+  }, 502);
 }
 
 export async function onRequest({ request }) {
