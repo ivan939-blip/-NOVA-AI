@@ -24,7 +24,11 @@ let videoPrompt = '';
 let videoDuration = '8';
 let videoRatio = '9:16';
 let videoStyle = 'dark cinematic';
-let videoStoryboard = '';\nlet videoBusy = false;\nlet videoStatus = '';\nlet videoUrl = '';\nlet videoError = '';
+let videoStoryboard = '';
+let videoBusy = false;
+let videoStatus = '';
+let videoUrl = '';
+let videoError = '';
 
 function esc(t) { return String(t ?? '').replace(/[&<>"']/g, ch => { switch (ch) { case '&': return '&amp;'; case '<': return '&lt;'; case '>': return '&gt;'; case '"': return '&quot;'; case "'": return '&#39;'; default: return ch; } }); }
 function icon(n) { return ({home:'⌂',chat:'◈',image:'◇',video:'▷',characters:'♙',library:'▣',adult:'18+'})[n]; }
