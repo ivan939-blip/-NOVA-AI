@@ -13,9 +13,18 @@ export async function onRequestPost({ request, env }) {
 
   let body;
   try {
-    body = await request.json();
+    const rawBody = await request.text();
+    if (rawBody.length > 100_000) return json({
+      error: 'Запит завеликий. Скороти історію або повідомлення.',
+      code: 'REQUEST_TOO_LARGE'
+    }, 413);
+    body = JSON.parse(rawBody);
   } catch {
     return json({ error: 'Сервер отримав некоректний JSON.', code: 'INVALID_JSON' }, 400);
+  }
+
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return json({ error: 'Очікується JSON-об’єкт.', code: 'INVALID_REQUEST' }, 400);
   }
 
   const rawMessages = Array.isArray(body?.messages) ? body.messages : [];
