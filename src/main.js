@@ -20,7 +20,7 @@ let imagePrompt = '';
 let customCharacters = store.get('nova-characters', []);
 let activeCharacter = store.get('nova-active-character', null);
 
-function esc(t) { return String(t ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
+function esc(t) { return String(t ?? '').replace(/[&<>"']/g, ch => { switch (ch) { case '&': return '&amp;'; case '<': return '&lt;'; case '>': return '&gt;'; case '"': return '&quot;'; case "'": return '&#39;'; default: return ch; } }); }
 function icon(n) { return ({home:'⌂',chat:'◈',image:'◇',video:'▷',characters:'♙',library:'▣',adult:'18+'})[n]; }
 function navItem(id, label) { return `<button class="nav-item ${active===id?'active':''}" data-go="${id}"><span>${icon(id)}</span><small>${label}</small></button>`; }
 function hero() { return `<section class="hero home-hero"><button class="menu-mark" aria-label="Меню">☰</button><button class="account-pill" id="open-auth">${session ? '● CLOUD' : '○ SIGN IN'}</button><div class="hero-moon"></div><div class="hero-castle">♜　♜　♜</div><div class="halo"></div><div class="heroine"><i></i><b></b><em></em></div><div class="hero-copy"><span class="eyebrow">YOUR AI. YOUR WORLD.</span><h1>NOVA <strong>AI ✦</strong></h1><p>Твоя темна муза для слів, образів і руху.</p></div><div class="free-panel"><b>∞</b><strong>Безкоштовно<br>Назавжди</strong><small>✓ Без лімітів<br>✓ Без підписок<br>✓ Без карток</small></div></section>`; }
