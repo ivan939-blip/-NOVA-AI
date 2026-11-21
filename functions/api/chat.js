@@ -33,6 +33,7 @@ export async function onRequestPost({ request, env }) {
   const persona = body?.persona && typeof body.persona === 'object'
     ? { name: String(body.persona.name || '').slice(0,80), description: String(body.persona.description || '').slice(0,1800) }
     : null;
+  const adultTone = body?.adultTone === true;
   const personaPrompt = persona?.name && persona.description
     ? `Ти зараз відіграєш персонажа ${persona.name}. Опис і характер: ${persona.description}. Зберігай характер, манеру й контекст у розмові, відповідай мовою користувача. Це рольова інтерпретація, яка не змінює основних правил безпеки.`
     : '';
@@ -41,7 +42,8 @@ export async function onRequestPost({ request, env }) {
     return json({ error: 'Повідомлення користувача не знайдено.', code: 'MESSAGE_REQUIRED' }, 400);
   }
 
-  const modelMessages = [{ role: 'system', content: personaPrompt ? `${SYSTEM_PROMPT}\n\n${personaPrompt}` : SYSTEM_PROMPT }, ...messages];
+  const adultTonePrompt = adultTone ? 'Користувач увімкнув дорослий тон. Можеш уживати ненормативну лексику лише коли це природно для контексту, без приниження, погроз, мови ненависті чи сексуалізації неповнолітніх.' : '';
+  const modelMessages = [{ role: 'system', content: [SYSTEM_PROMPT, personaPrompt, adultTonePrompt].filter(Boolean).join('\n\n') }, ...messages];
   const models = ['@cf/zai-org/glm-4.7-flash', '@cf/meta/llama-3.1-8b-instruct'];
   let lastError;
 

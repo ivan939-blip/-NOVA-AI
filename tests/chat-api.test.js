@@ -31,6 +31,14 @@ test('returns a non-streaming Workers AI response', async () => {
   assert.deepEqual(await res.json(), { answer: 'Привіт' });
 });
 
+test('adds the adult tone instruction only when explicitly enabled', async () => {
+  const res = await onRequestPost({
+    request: request(JSON.stringify({ messages: [{ role: 'user', content: 'hello' }], adultTone: true })),
+    env: { AI: { run: async (_model, options) => { assert.match(options.messages[0].content, /дорослий тон/); return { response: 'ok' }; } } }
+  });
+  assert.equal(res.status, 200);
+});
+
 test('passes through a streaming Workers AI response', async () => {
   const stream = new ReadableStream({ start(controller) { controller.enqueue(new TextEncoder().encode('data: test\n\n')); controller.close(); } });
   const res = await onRequestPost({
