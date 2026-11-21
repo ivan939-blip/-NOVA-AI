@@ -414,7 +414,21 @@ async function generateRealVideo() {
   } catch(e) { videoError=e.message||'Помилка генерації відео.'; videoStatus=''; }
   finally { videoBusy=false; render(); }
 }
+function installAdultCreativeControls(){
+  const prompt=$('#adult-prompt');
+  if(!prompt||$('#adult-creative-controls'))return;
+  const controls=document.createElement('section');
+  controls.id='adult-creative-controls';
+  controls.className='adult-creative-controls';
+  controls.innerHTML=`<b>Реалістичний персонаж</b><small>Лише вигаданий повнолітній образ. Вибір додається до промпту.</small><label>Тип персонажа</label><div class="chips"><button type="button" data-adult-model="feminine" class="${adultModel==='feminine'?'selected':''}">Жіночий</button><button type="button" data-adult-model="masculine" class="${adultModel==='masculine'?'selected':''}">Чоловічий</button><button type="button" data-adult-model="androgynous" class="${adultModel==='androgynous'?'selected':''}">Андрогінний</button></div><label>Візуальний стиль</label><div class="chips"><button type="button" data-adult-style="photorealistic" class="${adultStyle==='photorealistic'?'selected':''}">Fashion photo</button><button type="button" data-adult-style="cinematic" class="${adultStyle==='cinematic'?'selected':''}">Cinematic</button><button type="button" data-adult-style="gothic" class="${adultStyle==='gothic'?'selected':''}">Gothic</button></div><label>Готові безпечні деталі</label><div class="chips"><button type="button" data-adult-preset="full-length editorial pose, elegant evening outfit, detailed fabric, violet rim lighting">Повний зріст</button><button type="button" data-adult-preset="close-up beauty portrait, detailed skin texture, soft studio lighting, fashion magazine composition">Портрет</button><button type="button" data-adult-preset="dark gothic fashion, moonlit castle, dramatic violet light, confident pose">Готична сцена</button></div>`;
+  prompt.closest('label')?.before(controls);
+  controls.querySelectorAll('[data-adult-model]').forEach(button=>button.onclick=()=>{adultModel=button.dataset.adultModel;store.set('nova-adult-image-model',adultModel);installAdultCreativeControls();render();});
+  controls.querySelectorAll('[data-adult-style]').forEach(button=>button.onclick=()=>{adultStyle=button.dataset.adultStyle;store.set('nova-adult-image-style',adultStyle);installAdultCreativeControls();render();});
+  controls.querySelectorAll('[data-adult-preset]').forEach(button=>button.onclick=()=>{imagePrompt=(prompt.value.trim()+' '+button.dataset.adultPreset).trim();prompt.value=imagePrompt;prompt.focus();});
+}
+
 function bind(){
+  installAdultCreativeControls();
   $('#generate-real-video')?.addEventListener('click',generateRealVideo);
   document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>{active=b.dataset.go;render();});
   $('#new-chat')?.addEventListener('click',newChat);
