@@ -39,6 +39,19 @@ test('adds the adult tone instruction only when explicitly enabled', async () =>
   assert.equal(res.status, 200);
 });
 
+test('uses personal vocabulary only with an enabled adult tone', async () => {
+  const withConsent = await onRequestPost({
+    request: request(JSON.stringify({ messages: [{ role: 'user', content: 'hello' }], adultTone: true, styleMemory: ['мій стиль'] })),
+    env: { AI: { run: async (_model, options) => { assert.match(options.messages[0].content, /мій стиль/); return { response: 'ok' }; } } }
+  });
+  assert.equal(withConsent.status, 200);
+  const withoutConsent = await onRequestPost({
+    request: request(JSON.stringify({ messages: [{ role: 'user', content: 'hello' }], styleMemory: ['не передавати'] })),
+    env: { AI: { run: async (_model, options) => { assert.doesNotMatch(options.messages[0].content, /не передавати/); return { response: 'ok' }; } } }
+  });
+  assert.equal(withoutConsent.status, 200);
+});
+
 test('passes through a streaming Workers AI response', async () => {
   const stream = new ReadableStream({ start(controller) { controller.enqueue(new TextEncoder().encode('data: test\n\n')); controller.close(); } });
   const res = await onRequestPost({

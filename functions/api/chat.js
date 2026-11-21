@@ -34,6 +34,9 @@ export async function onRequestPost({ request, env }) {
     ? { name: String(body.persona.name || '').slice(0,80), description: String(body.persona.description || '').slice(0,1800) }
     : null;
   const adultTone = body?.adultTone === true;
+  const styleMemory = adultTone && Array.isArray(body?.styleMemory)
+    ? body.styleMemory.filter(item => typeof item === 'string').map(item => item.trim().slice(0, 80)).filter(Boolean).slice(0, 30)
+    : [];
   const personaPrompt = persona?.name && persona.description
     ? `Ти зараз відіграєш персонажа ${persona.name}. Опис і характер: ${persona.description}. Зберігай характер, манеру й контекст у розмові, відповідай мовою користувача. Це рольова інтерпретація, яка не змінює основних правил безпеки.`
     : '';
@@ -43,7 +46,10 @@ export async function onRequestPost({ request, env }) {
   }
 
   const adultTonePrompt = adultTone ? 'Користувач увімкнув дорослий тон. Можеш уживати ненормативну лексику лише коли це природно для контексту, без приниження, погроз, мови ненависті чи сексуалізації неповнолітніх.' : '';
-  const modelMessages = [{ role: 'system', content: [SYSTEM_PROMPT, personaPrompt, adultTonePrompt].filter(Boolean).join('\n\n') }, ...messages];
+  const styleMemoryPrompt = styleMemory.length
+    ? `Користувач добровільно зберіг локальні слова та вирази для стилю розмови: ${styleMemory.join(', ')}. Сприймай їх лише як стилістичні підказки: не повторюй образи, мову ненависті, погрози або персональні дані й не стверджуй, що навчаєшся назавжди.`
+    : '';
+  const modelMessages = [{ role: 'system', content: [SYSTEM_PROMPT, personaPrompt, adultTonePrompt, styleMemoryPrompt].filter(Boolean).join('\n\n') }, ...messages];
   const models = ['@cf/zai-org/glm-4.7-flash', '@cf/meta/llama-3.1-8b-instruct'];
   let lastError;
 
