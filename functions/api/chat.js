@@ -29,7 +29,7 @@ export async function onRequestPost({ request, env }) {
 
   const voiceMode = body?.voiceMode === true;
   const rawMessages = Array.isArray(body?.messages) ? body.messages : [];
-  const messages = rawMessages.slice(-20).filter(m => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string').map(m => ({ role: m.role, content: m.content.slice(0, 4000) }));
+  const messages = rawMessages.slice(voiceMode ? -5 : -20).filter(m => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string').map(m => ({ role: m.role, content: m.content.slice(0, voiceMode ? 500 : 4000) }));
 
   const persona = body?.persona && typeof body.persona === 'object'
     ? { name: String(body.persona.name || '').slice(0,80), description: String(body.persona.description || '').slice(0,1800) }
@@ -59,13 +59,17 @@ export async function onRequestPost({ request, env }) {
 
   for (const model of models) {
     try {
-      const result = await env.AI.run(model, {
+      const run = env.AI.run(model, {
         messages: modelMessages,
         max_completion_tokens: voiceMode ? 160 : 700,
         temperature: 0.7,
         stream: !voiceMode,
         chat_template_kwargs: { enable_thinking: false }
       });
+      let timer;
+      const result = voiceMode
+        ? await Promise.race([run, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('MODEL_TIMEOUT')), 12000); })]).finally(() => clearTimeout(timer))
+        : await run;
       if (!voiceMode && typeof result?.getReader === 'function') {
         return new Response(result, {
           headers: { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-cache, no-transform', 'X-Accel-Buffering': 'no' }
