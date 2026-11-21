@@ -47,18 +47,18 @@ test('rejects prompts over the allowed limit', async () => {
   assert.equal(invoked, false);
 });
 
-test('returns base64 image data from FLUX with a reproducible seed', async () => {
+test('returns base64 image data from FLUX without sending unsupported seed', async () => {
   const res = await post(JSON.stringify({ prompt: 'moonlit castle', seed: 12345 }), {
     AI: { run: async (model, options) => {
       assert.equal(model, '@cf/black-forest-labs/flux-1-schnell');
       assert.equal(options.steps, 4);
-      assert.equal(options.seed, 12345);
+      assert.equal(options.seed, undefined);
       assert.match(options.prompt, /Follow every explicit detail/);
       return { image: 'YWJj' };
     } }
   });
   assert.equal(res.status, 200);
-  const body=await res.json(); assert.equal(body.image, 'data:image/jpeg;base64,YWJj'); assert.equal(body.seed,12345); assert.equal(body.strictPromptApplied,true);
+  const body=await res.json(); assert.equal(body.image, 'data:image/jpeg;base64,YWJj'); assert.equal(body.seed,12345); assert.equal(body.seedApplied,false); assert.equal(body.strictPromptApplied,true);
 });
 
 test('adds the selected NOVA Director art direction to image generation', async () => {
@@ -72,10 +72,18 @@ test('adds the selected NOVA Director art direction to image generation', async 
   assert.equal(res.status, 200);
 });
 
-test('falls back to image generation without seed only when the provider rejects seed', async () => {
+test('does not send unsupported seed to FLUX Schnell', async () => {
   let calls=0;
-  const res=await post(JSON.stringify({prompt:'moon',seed:42}),{AI:{run:async (_model,options)=>{calls++;if(options.seed)throw new Error('seed validation failed');assert.equal(options.seed,undefined);return {image:'YWJj'};}}});
-  const body=await res.json(); assert.equal(res.status,200); assert.equal(calls,2); assert.equal(body.seedApplied,false);
+  const res=await post(JSON.stringify({prompt:'moon',seed:42}),{AI:{run:async (_model,options)=>{
+    calls++;
+    assert.equal(options.seed,undefined);
+    return {image:'YWJj'};
+  }}});
+  const body=await res.json();
+  assert.equal(res.status,200);
+  assert.equal(calls,1);
+  assert.equal(body.seed,42);
+  assert.equal(body.seedApplied,false);
 });
 
 test('uses FLUX reference model for a valid uploaded image', async () => {
