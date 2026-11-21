@@ -154,7 +154,7 @@ function startVoiceInput(){
     if(sessionId!==voiceSessionId)return;
     const text=(finalTranscript||transcript).trim();
     if(text&&!chatBusy&&(voiceConversationMode||voiceSendAfterRecognition)){
-      setVoicePhase('thinking');
+      setVoiceNotice('Почула: '+text+'. Надсилаю NOVA…');setVoicePhase('thinking');
       learnAdultVocabulary(text);messages.push({role:'user',text});persistChat();
       askNOVA(text);
     }else if(voiceConversationMode&&!failed){setVoicePhase('idle');setVoiceNotice('Слухаю далі…');scheduleNextVoiceTurn(sessionId);}
@@ -173,8 +173,8 @@ window.addEventListener('nova-native-voice',event=>{
     voiceListening=false;currentRecognition=null;
     if(!voiceConversationMode)return;
     const text=String(value||'').trim();
-    if(text&&!chatBusy){setVoicePhase('thinking');learnAdultVocabulary(text);messages.push({role:'user',text});persistChat();askNOVA(text);}
-    else scheduleNextVoiceTurn(voiceSessionId);
+    if(text&&!chatBusy){setVoiceNotice('Почула: '+text+'. Надсилаю NOVA…');setVoicePhase('thinking');learnAdultVocabulary(text);messages.push({role:'user',text});persistChat();askNOVA(text);}
+    else {setVoiceNotice('Не розпізнала слова. Слухаю ще раз…');scheduleNextVoiceTurn(voiceSessionId);}
   }
   if(type==='recognition-error'){voiceListening=false;currentRecognition=null;setVoicePhase('idle');const code=Number(value);if(voiceConversationMode&&(code===6||code===7||code===8)){setVoiceNotice('Не почула фразу. Слухаю ще раз…');scheduleNextVoiceTurn(voiceSessionId);}else setVoiceNotice('Мікрофон Android: '+(value||'помилка')+'. Перевір дозволи та натисни «Почати».');}
 });
@@ -258,7 +258,7 @@ function downloadWorkPlan(){ const blob=new Blob([workPlan],{type:'text/plain;ch
 async function saveWorkPlan(){ if(!workDirectory||!workPlan)return; try{const file=await workDirectory.getFileHandle('nova-work-plan.txt',{create:true});const writer=await file.createWritable();await writer.write(workPlan);await writer.close();workStatus='План записано в обрану папку як nova-work-plan.txt.';}catch(error){workStatus='Не вдалося записати файл у папку.';}render(); }
 async function askNOVA(text) {
   const requestVoiceSession=voiceConversationMode?voiceSessionId:null;
-  if(voiceConversationMode)setVoicePhase('thinking');
+  if(voiceConversationMode){setVoicePhase('thinking');setVoiceNotice('Питання надіслано. Чекаю відповідь AI…');}
   chatBusy=true;
   render();
   const controller=new AbortController();
