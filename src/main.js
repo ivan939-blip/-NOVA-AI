@@ -433,6 +433,28 @@ function installNovaDirector(){
   director.querySelectorAll('[data-nova-focus]').forEach(button=>button.onclick=()=>{novaFocus=button.dataset.novaFocus;store.set('nova-director-focus',novaFocus);render();});
 }
 
+function startWorkVoiceCommand(){
+  const task=$('#work-task'), notice=$('#work-voice-notice');
+  if(!task)return;
+  if(!SpeechRecognition){if(notice)notice.textContent='Голосові команди доступні у Chrome або в desktop-версії з підтримкою розпізнавання.';return;}
+  const recognition=new SpeechRecognition();
+  recognition.lang='uk-UA';recognition.interimResults=false;recognition.maxAlternatives=1;
+  if(notice)notice.textContent='Слухаю команду…';
+  recognition.onresult=event=>{
+    const command=event.results[0]?.[0]?.transcript?.trim()||'';
+    if(!command)return;
+    task.value=command;
+    const normalized=command.toLowerCase();
+    if(/запусти|відкрий програм|launch/.test(normalized)){workScopes.apps=true;workActionQueue=[{title:`Дія у програмі: ${command}`}];}
+    else if(/відкрий|open/.test(normalized)){workScopes.browser=true;workActionQueue=[{title:`Браузерна дія: ${command}`}];}
+    else {workActionQueue=[{title:`Робоче завдання: ${command}`}];}
+    store.set('nova-work-scopes',workScopes);store.set('nova-work-action-queue',workActionQueue);
+    if(notice)notice.textContent='Команду розпізнано. Перевір текст і створюй план або список дій.';
+  };
+  recognition.onerror=()=>{if(notice)notice.textContent='Не вдалося розпізнати команду. Спробуй ще раз або введи текст.';};
+  recognition.start();
+}
+
 function installWorkConsole(){
   const task=$('#work-task');
   if(!task||$('#work-console'))return;
@@ -440,9 +462,10 @@ function installWorkConsole(){
   console.id='work-console';
   console.className='work-console';
   const queued=workActionQueue.length?`<ul>${workActionQueue.map(item=>`<li><b>${esc(item.title)}</b><small>Очікує твого окремого підтвердження</small></li>`).join('')}</ul>`:'';
-  console.innerHTML=`<b>КОНСОЛЬ ДІЙ NOVA</b><p>Обери, для чого підготувати кроки. NOVA не натискає кнопки, не керує програмами та не змінює дані без окремого підтвердження.</p><label><input type="checkbox" data-work-scope="files" ${workScopes.files?'checked':''}> Обрані файли й папки</label><label><input type="checkbox" data-work-scope="browser" ${workScopes.browser?'checked':''}> Браузер: підготувати дії та перевірки</label><label><input type="checkbox" data-work-scope="apps" ${workScopes.apps?'checked':''}> Програми: підготувати послідовність дій</label><button type="button" class="secondary" id="build-work-queue">＋ Створити список дій</button>${queued}`;
+  console.innerHTML=`<b>КОНСОЛЬ ДІЙ NOVA</b><p>Обери, для чого підготувати кроки. NOVA не натискає кнопки, не керує програмами та не змінює дані без окремого підтвердження.</p><button type="button" class="secondary" id="work-voice-command">🎙 Сказати команду</button><small id="work-voice-notice">Скажи, наприклад: «Відкрий сайт і підготуй перевірку» або «Запусти програму та створи список кроків».</small><label><input type="checkbox" data-work-scope="files" ${workScopes.files?'checked':''}> Обрані файли й папки</label><label><input type="checkbox" data-work-scope="browser" ${workScopes.browser?'checked':''}> Браузер: підготувати дії та перевірки</label><label><input type="checkbox" data-work-scope="apps" ${workScopes.apps?'checked':''}> Програми: підготувати послідовність дій</label><button type="button" class="secondary" id="build-work-queue">＋ Створити список дій</button>${queued}`;
   task.closest('label')?.after(console);
   console.querySelectorAll('[data-work-scope]').forEach(input=>input.onchange=()=>{workScopes[input.dataset.workScope]=input.checked;store.set('nova-work-scopes',workScopes);});
+  console.querySelector('#work-voice-command')?.addEventListener('click',startWorkVoiceCommand);
   console.querySelector('#build-work-queue')?.addEventListener('click',()=>{
     const taskText=task.value.trim()||'Поточне завдання';
     workActionQueue=[];
