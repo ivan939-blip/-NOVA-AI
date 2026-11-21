@@ -93,6 +93,18 @@ test('requires 18+ mode for adult prompts and blocks minor or reference misuse',
   assert.equal(ukrainianMinor.status,400); assert.equal((await ukrainianMinor.json()).code,'MINORS_NOT_ALLOWED');
 });
 
+test('uses an original photorealistic adult model instruction after age gating', async () => {
+  const res = await post(JSON.stringify({ prompt: 'elegant masculine fashion pose', adultMode: true, adultModel: 'masculine', adultStyle: 'cinematic' }), {
+    AI: { run: async (_model, options) => {
+      assert.match(options.prompt, /original, fictional, consenting adult age 25 or older/);
+      assert.match(options.prompt, /masculine presentation/);
+      assert.match(options.prompt, /photorealistic cinematic editorial photography/);
+      return { image: 'YWJj' };
+    } }
+  });
+  assert.equal(res.status, 200);
+});
+
 test('converts binary image output to base64', async () => {
   const res = await post(JSON.stringify({ prompt: 'moonlit castle' }), {
     AI: { run: async () => new Uint8Array([97, 98, 99]) }

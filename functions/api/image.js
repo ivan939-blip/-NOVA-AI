@@ -61,6 +61,8 @@ export async function onRequestPost({ request, env }) {
   if (ADULT_TERMS.test(prompt) && !adultMode) return json({ error:'Для повнолітнього контенту спершу ввімкни 18+ Mode.', code:'ADULT_MODE_REQUIRED' },403);
   if (adultMode && reference) return json({ error:'Для приватної 18+ генерації не можна використовувати фото-референси реальних людей.', code:'ADULT_REFERENCE_NOT_ALLOWED' },400);
   const presentation = ['feminine','masculine','unspecified'].includes(body.presentation) ? body.presentation : 'unspecified';
+  const adultModel = ['feminine', 'masculine', 'androgynous', 'unspecified'].includes(body.adultModel) ? body.adultModel : 'unspecified';
+  const adultStyle = ['photorealistic', 'cinematic', 'gothic'].includes(body.adultStyle) ? body.adultStyle : 'photorealistic';
   const preserveFace = body.preserveFace === true;
   const strictPrompt = body.strictPrompt !== false;
   const seed = validSeed(body.seed);
@@ -75,7 +77,10 @@ export async function onRequestPost({ request, env }) {
       const request = new Request('https://nova.local/image-reference', {method:'POST',body:form});
       result = await env.AI.run('@cf/black-forest-labs/flux-2-klein-4b', { multipart:{body:request.body,contentType:request.headers.get('content-type')} });
     } else {
-      const modelPrompt = [adultMode ? 'Depict only consenting fictional adults.' : '', prompt, strictPrompt ? STRICT_PROMPT_SUFFIX : ''].filter(Boolean).join('\n\n');
+      const adultInstruction = adultMode
+        ? `Depict exactly one original, fictional, consenting adult age 25 or older${adultModel === 'unspecified' ? ' with the adult presentation requested by the user' : ` with a ${adultModel} presentation`}. Use a ${adultStyle === 'photorealistic' ? 'photorealistic high-end editorial fashion photography' : adultStyle === 'cinematic' ? 'photorealistic cinematic editorial photography' : 'photorealistic dark gothic editorial photography'} aesthetic. Never depict a real person or a minor.`
+        : '';
+      const modelPrompt = [adultInstruction, prompt, strictPrompt ? STRICT_PROMPT_SUFFIX : ''].filter(Boolean).join('\n\n');
       try {
         result = await env.AI.run('@cf/black-forest-labs/flux-1-schnell', { prompt: modelPrompt, seed, steps: 4 });
       } catch (seedError) {

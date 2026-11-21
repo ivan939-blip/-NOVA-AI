@@ -34,6 +34,8 @@ let imagePresentation = 'unspecified';
 let preserveFace = true;
 let imageSeed = store.get('nova-image-seed', Math.floor(Math.random()*9_999_999_999)+1);
 let imageStrictPrompt = store.get('nova-image-strict-prompt', true);
+let adultModel = store.get('nova-adult-image-model', 'unspecified');
+let adultStyle = store.get('nova-adult-image-style', 'photorealistic');
 let customCharacters = store.get('nova-characters', []);
 let characterNotice = '';
 let activeCharacter = store.get('nova-active-character', null);
@@ -241,7 +243,7 @@ async function generateImage(){
   try{
     const res=await fetch(`${import.meta.env.BASE_URL}api/image`,{
       method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({prompt,referenceImage:imageReference||undefined,presentation:imagePresentation,preserveFace,adultMode:Boolean(adult&&active==='adult'),seed:imageSeed,strictPrompt:imageStrictPrompt}),signal:controller.signal
+      body:JSON.stringify({prompt,referenceImage:imageReference||undefined,presentation:imagePresentation,preserveFace,adultMode:Boolean(adult&&active==='adult'),adultModel,adultStyle,seed:imageSeed,strictPrompt:imageStrictPrompt}),signal:controller.signal
     });
     const data=await res.json().catch(()=>({}));
     if(!res.ok)throw new Error(data.error||data.code||'Сервер не повернув зображення.');
