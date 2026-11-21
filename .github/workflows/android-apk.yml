@@ -7,7 +7,11 @@ on:
     paths:
       - '.github/workflows/android-apk.yml'
       - 'native-android/**'
-      - 'src/main.js'
+      - 'src/**'
+      - 'functions/**'
+      - 'tests/**'
+      - 'package.json'
+      - 'package-lock.json'
       - 'capacitor.config.json'
 
 permissions:
