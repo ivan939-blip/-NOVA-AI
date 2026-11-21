@@ -76,6 +76,7 @@ let workActionQueue = store.get('nova-work-action-queue', []);
 if(!Array.isArray(workActionQueue)) workActionQueue=[];
 let workDesktopApps = [];
 let workPendingApp = '';
+let workVoiceListening = false;
 const localVideoApi = (import.meta.env.VITE_LOCAL_VIDEO_API_URL || 'http://127.0.0.1:8189/api/video').replace(/\/$/, '');
 
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -187,6 +188,8 @@ function startVoiceInput(){
 window.addEventListener('nova-native-voice',event=>{
   const {type,value}=event.detail||{};
   if(type==='apps-ready'){loadDesktopApplications();return;}
+  if(type==='recognition-result'&&workVoiceListening){workVoiceListening=false;applyWorkVoiceCommand(value);return;}
+  if(type==='recognition-error'&&workVoiceListening){workVoiceListening=false;const notice=$('#work-voice-notice');if(notice)notice.textContent='Не вдалося розпізнати команду. Спробуй ще раз.';return;}
   if(type==='speech-start'){setVoicePhase('speaking');setVoiceNotice('NOVA говорить…');}
   if(type==='speech-end'){setVoicePhase('idle');if(voiceConversationMode)scheduleNextVoiceTurn(voiceSessionId);}
   if(type==='speech-error'){setVoicePhase('idle');setVoiceNotice('Помилка озвучення Android: '+(value||'невідомо'));}
@@ -455,25 +458,30 @@ function updatePendingAppUI(){
   if(notice&&workPendingApp){const app=workDesktopApps.find(item=>item.id===workPendingApp);notice.textContent=`Розпізнано: ${app?.label||'програма'}. Підтвердь відкриття кнопкою нижче.`;}
 }
 
-function startWorkVoiceCommand(){
+function applyWorkVoiceCommand(rawCommand){
   const task=$('#work-task'), notice=$('#work-voice-notice');
-  if(!task)return;
-  if(!SpeechRecognition){if(notice)notice.textContent='Голосові команди доступні у Chrome або в desktop-версії з підтримкою розпізнавання.';return;}
+  const command=String(rawCommand||'').trim();
+  if(!task||!command)return;
+  task.value=command;
+  const normalized=command.toLowerCase();
+  const spokenApp=findSpokenApplication(command);
+  if(spokenApp){workScopes.apps=true;workPendingApp=spokenApp.id;workActionQueue=[{title:`Відкрити програму: ${spokenApp.label}`}];updatePendingAppUI();}
+  else if(/запусти|відкрий програм|launch/.test(normalized)){workScopes.apps=true;workActionQueue=[{title:`Дія у програмі: ${command}`}];if(notice)notice.textContent='Яку саме програму відкрити? Назви доступну програму зі списку нижче.';}
+  else if(/відкрий|open/.test(normalized)){workScopes.browser=true;workActionQueue=[{title:`Браузерна дія: ${command}`}];}
+  else {workActionQueue=[{title:`Робоче завдання: ${command}`}];}
+  store.set('nova-work-scopes',workScopes);store.set('nova-work-action-queue',workActionQueue);
+  if(notice&&!spokenApp)notice.textContent='Команду розпізнано. Перевір текст і створюй план або список дій.';
+}
+
+function startWorkVoiceCommand(){
+  const notice=$('#work-voice-notice');
+  if(!SpeechRecognition&&nativeVoice()){workVoiceListening=true;if(notice)notice.textContent='Слухаю команду…';window.NovaVoice.listen();return;}
+  if(!SpeechRecognition){if(notice)notice.textContent='Голосові команди недоступні на цьому пристрої.';return;}
   const recognition=new SpeechRecognition();
   recognition.lang='uk-UA';recognition.interimResults=false;recognition.maxAlternatives=1;
   if(notice)notice.textContent='Слухаю команду…';
   recognition.onresult=event=>{
-    const command=event.results[0]?.[0]?.transcript?.trim()||'';
-    if(!command)return;
-    task.value=command;
-    const normalized=command.toLowerCase();
-    const spokenApp=findSpokenApplication(command);
-    if(spokenApp){workScopes.apps=true;workPendingApp=spokenApp.id;workActionQueue=[{title:`Відкрити програму: ${spokenApp.label}`}];updatePendingAppUI();}
-    else if(/запусти|відкрий програм|launch/.test(normalized)){workScopes.apps=true;workActionQueue=[{title:`Дія у програмі: ${command}`}];if(notice)notice.textContent='Яку саме програму відкрити? Назви Chrome, Edge, Провідник, Блокнот або Калькулятор.';}
-    else if(/відкрий|open/.test(normalized)){workScopes.browser=true;workActionQueue=[{title:`Браузерна дія: ${command}`}];}
-    else {workActionQueue=[{title:`Робоче завдання: ${command}`}];}
-    store.set('nova-work-scopes',workScopes);store.set('nova-work-action-queue',workActionQueue);
-    if(notice)notice.textContent='Команду розпізнано. Перевір текст і створюй план або список дій.';
+    applyWorkVoiceCommand(event.results[0]?.[0]?.transcript);
   };
   recognition.onerror=()=>{if(notice)notice.textContent='Не вдалося розпізнати команду. Спробуй ще раз або введи текст.';};
   recognition.start();
