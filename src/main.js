@@ -427,6 +427,23 @@ async function generateRealVideo() {
   } catch(e) { videoError=e.message||'Помилка генерації відео.'; videoStatus=''; }
   finally { videoBusy=false; render(); }
 }
+function installImageComposer(){
+  const prompt=$('#image-prompt');
+  if(!prompt||$('#image-composer'))return;
+  const composer=document.createElement('section');
+  composer.id='image-composer';composer.className='image-composer';
+  composer.innerHTML=`<b>✦ Конструктор зображення</b><small>Заповни потрібне — NOVA перетворить параметри на точний опис кадру.</small><div class="image-composer-grid"><label>Головний персонаж / об’єкт<input id="composer-subject" maxlength="180" placeholder="Наприклад: готична героїня"/></label><label>Місце / сцена<input id="composer-scene" maxlength="180" placeholder="Наприклад: замок під місяцем"/></label><label>Одяг і важливі деталі<input id="composer-details" maxlength="220" placeholder="Наприклад: чорна сукня, срібні прикраси"/></label><label>Поза або дія<input id="composer-action" maxlength="180" placeholder="Наприклад: дивиться в камеру"/></label><label>Світло / настрій<input id="composer-light" maxlength="180" placeholder="Наприклад: м’яке фіолетове неонове світло"/></label><label>Формат кадру<select id="composer-frame"><option value="vertical 9:16 mobile poster composition">Вертикальний 9:16</option><option value="square 1:1 balanced composition">Квадрат 1:1</option><option value="wide 16:9 cinematic composition">Горизонтальний 16:9</option><option value="close-up portrait composition">Крупний портрет</option></select></label></div><div class="work-actions"><button type="button" class="secondary" id="apply-image-composer">✦ Додати до опису</button><button type="button" class="secondary" id="clear-image-composer">Очистити поля</button></div><p class="notice" id="image-composer-notice">Можна комбінувати з власним текстом і фото-референсом. Модель може інтерпретувати деталі, тому для нового варіанта змінюй seed.</p>`;
+  prompt.closest('label')?.before(composer);
+  composer.querySelector('#apply-image-composer')?.addEventListener('click',()=>{
+    const values=[['subject','Головний об’єкт'],['scene','Сцена'],['details','Деталі'],['action','Дія'],['light','Світло']].map(([id,label])=>[label,composer.querySelector(`#composer-${id}`)?.value.trim()]).filter(([,value])=>value);
+    const frame=composer.querySelector('#composer-frame')?.value;
+    if(!values.length){composer.querySelector('#image-composer-notice').textContent='Додай хоча б персонажа, сцену або важливу деталь.';return;}
+    const description=[...values.map(([label,value])=>`${label}: ${value}.`),frame?`Composition: ${frame}.`:'' ].filter(Boolean).join(' ');
+    imagePrompt=(prompt.value.trim()+' '+description).trim();prompt.value=imagePrompt;composer.querySelector('#image-composer-notice').textContent='Опис кадру додано. За потреби відредагуй текст перед генерацією.';
+  });
+  composer.querySelector('#clear-image-composer')?.addEventListener('click',()=>{composer.querySelectorAll('input').forEach(input=>input.value='');composer.querySelector('#image-composer-notice').textContent='Поля очищено. Твій основний опис не змінено.';});
+}
+
 function installNovaDirector(){
   const prompt=$('#image-prompt');
   if(!prompt||$('#nova-director'))return;
@@ -539,6 +556,7 @@ function installAdultCreativeControls(){
 }
 
 function bind(){
+  installImageComposer();
   installNovaDirector();
   installWorkConsole();
   installAdultCreativeControls();

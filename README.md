@@ -8,6 +8,7 @@ Mobile-first Gothic Cyberpunk AI Studio. The permanent purple-black heroine home
 - Cloudflare Pages Function for the NOVA chat API.
 - Cloudflare Workers AI integration (no OpenAI key required).
 - Image generation endpoint is implemented with Cloudflare Workers AI FLUX (deployment/limits must be verified).
+- Image Studio supports text-to-image, photo-reference transformation, chosen presentation and face preservation, structured scene description, NOVA Director art direction, and seed-based variations.
 - Video idea drafts can be saved locally. Local Motion Forge creates a free MP4 from an image or NOVA neon background, with styling and ambient audio.
 - Character selection and a local 18+ mode toggle.
 - Optional Supabase sign-in and cloud library (requires a free Supabase project).
