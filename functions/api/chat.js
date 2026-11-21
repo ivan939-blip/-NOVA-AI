@@ -53,8 +53,8 @@ export async function onRequestPost({ request, env }) {
   const voicePrompt = voiceMode ? 'Це жива голосова розмова. Відповідай природно українською, зазвичай 1–3 короткими реченнями. Без Markdown, списків, емодзі та довгих вступів. Якщо потрібна докладна відповідь, дай її на прохання користувача.' : '';
   const modelMessages = [{ role: 'system', content: [SYSTEM_PROMPT, voicePrompt, personaPrompt, adultTonePrompt, styleMemoryPrompt].filter(Boolean).join('\n\n') }, ...messages];
   const models = voiceMode
-    ? ['@cf/meta/llama-3.1-8b-instruct', '@cf/zai-org/glm-4.7-flash']
-    : ['@cf/zai-org/glm-4.7-flash', '@cf/meta/llama-3.1-8b-instruct'];
+    ? ['@cf/meta/llama-3.1-8b-instruct-fast', '@cf/zai-org/glm-4.7-flash']
+    : ['@cf/zai-org/glm-4.7-flash', '@cf/meta/llama-3.1-8b-instruct-fast'];
   let lastError;
   const failures = [];
 
@@ -62,10 +62,9 @@ export async function onRequestPost({ request, env }) {
     try {
       const run = env.AI.run(model, {
         messages: modelMessages,
-        max_completion_tokens: voiceMode ? 160 : 700,
+        max_tokens: voiceMode ? 120 : 600,
         temperature: 0.7,
-        stream: !voiceMode,
-        chat_template_kwargs: { enable_thinking: false }
+        stream: !voiceMode
       });
       let timer;
       const result = voiceMode
