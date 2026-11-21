@@ -1,0 +1,12 @@
+{
+  "appId": "ai.nova.studio",
+  "appName": "NOVA AI",
+  "webDir": "dist",
+  "server": {
+    "url": "https://nova-ai-7qd.pages.dev",
+    "cleartext": false
+  },
+  "android": {
+    "allowMixedContent": false
+  }
+}
