@@ -40,20 +40,25 @@ function execFfmpeg(args) {
 function unpackImage(value, id) {
   const match = typeof value === 'string' && value.match(/^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$/);
   if (!match) return null;
-  return { name: `source-${id}.${match[1] === 'jpeg' ? 'jpg' : match[1]}`, data: Buffer.from(match[2], 'base64') };
+  const data = Buffer.from(match[2], 'base64');
+  // Tiny/corrupt placeholders can make FFmpeg scale indefinitely on weak CPUs.
+  if (data.length < 1_024) return null;
+  return { name: `source-${id}.${match[1] === 'jpeg' ? 'jpg' : match[1]}`, data };
 }
 async function render(job, image) {
   await mkdir(outputDir, { recursive: true });
   const target = resolve(outputDir, `nova-${job.id}.mp4`);
   const title = 'NOVA AI // LOCAL MOTION';
+  const size = job.aspectRatio === '16:9' ? '854x480' : job.aspectRatio === '1:1' ? '640x640' : '480x854';
+  const [width, height] = size.split('x');
   let args;
   if (image) {
     const source = resolve(outputDir, image.name); await writeFile(source, image.data);
-    args = ['-y', '-loop', '1', '-i', source, '-f', 'lavfi', '-i', 'sine=frequency=55:sample_rate=44100', '-filter_complex', `[0:v]scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280,zoompan=z='min(zoom+0.0007,1.12)':d=${job.seconds * 30}:s=720x1280:fps=30,eq=contrast=1.08:saturation=1.18,drawtext=text='${title}':fontcolor=white@0.8:fontsize=21:x=36:y=h-70[v]`, '-map', '[v]', '-map', '1:a'];
+    args = ['-y', '-loop', '1', '-i', source, '-f', 'lavfi', '-i', 'sine=frequency=55:sample_rate=44100', '-filter_complex', `[0:v]scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height},eq=contrast=1.08:saturation=1.18,fade=t=in:st=0:d=0.5,drawtext=text='${title}':fontcolor=white@0.8:fontsize=18:x=28:y=h-55[v]`, '-map', '[v]', '-map', '1:a'];
   } else {
-    args = ['-y', '-f', 'lavfi', '-i', 'color=c=0x10071d:s=720x1280:r=30', '-f', 'lavfi', '-i', 'sine=frequency=55:sample_rate=44100', '-filter_complex', `[0:v]drawgrid=width=72:height=72:thickness=1:color=0x8c4dff@0.13,eq=contrast=1.12:saturation=1.3,drawtext=text='${title}':fontcolor=0xdcc8ff@0.9:fontsize=23:x=36:y=h-70[v]`, '-map', '[v]', '-map', '1:a'];
+    args = ['-y', '-f', 'lavfi', '-i', `color=c=0x10071d:s=${size}:r=24`, '-f', 'lavfi', '-i', 'sine=frequency=55:sample_rate=44100', '-filter_complex', `[0:v]drawgrid=width=56:height=56:thickness=1:color=0x8c4dff@0.13,eq=contrast=1.12:saturation=1.3,drawtext=text='${title}':fontcolor=0xdcc8ff@0.9:fontsize=20:x=28:y=h-55[v]`, '-map', '[v]', '-map', '1:a'];
   }
-  args.push('-t', String(job.seconds), '-r', '30', '-c:v', 'libx264', '-preset', 'veryfast', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '96k', '-af', 'volume=0.035', '-movflags', '+faststart', target);
+  args.push('-t', String(job.seconds), '-r', '24', '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '64k', '-af', 'volume=0.035', '-movflags', '+faststart', target);
   await execFfmpeg(args); job.file = `nova-${job.id}.mp4`; job.status = 'completed';
 }
 
@@ -67,7 +72,7 @@ createServer(async (req, res) => {
       const input = await parseBody(req); const prompt = typeof input?.prompt === 'string' ? input.prompt.trim() : '';
       if (!prompt) return send(res, 400, { error: 'Опиши відео.', code: 'PROMPT_REQUIRED' }, origin);
       if (prompt.length > 1800) return send(res, 400, { error: 'Опис має бути не довшим за 1800 символів.', code: 'PROMPT_TOO_LONG' }, origin);
-      const id = randomUUID(); const job = { id, status: 'processing', seconds: Math.max(4, Math.min(12, Number(input.seconds) || 5)) }; jobs.set(id, job);
+      const id = randomUUID(); const job = { id, status: 'processing', seconds: Math.max(4, Math.min(12, Number(input.seconds) || 5)), aspectRatio: ['16:9', '1:1', '9:16'].includes(input.aspect_ratio) ? input.aspect_ratio : '9:16' }; jobs.set(id, job);
       render(job, unpackImage(input.image, id)).catch(error => { console.error(error); job.status = 'failed'; job.error = 'Не вдалося зібрати MP4 локально.'; });
       return send(res, 202, { video_id: id, provider: 'local-motion-forge' }, origin);
     }
