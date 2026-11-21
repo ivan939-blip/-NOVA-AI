@@ -56,6 +56,7 @@ export async function onRequestPost({ request, env }) {
     ? ['@cf/meta/llama-3.1-8b-instruct', '@cf/zai-org/glm-4.7-flash']
     : ['@cf/zai-org/glm-4.7-flash', '@cf/meta/llama-3.1-8b-instruct'];
   let lastError;
+  const failures = [];
 
   for (const model of models) {
     try {
@@ -68,7 +69,7 @@ export async function onRequestPost({ request, env }) {
       });
       let timer;
       const result = voiceMode
-        ? await Promise.race([run, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('MODEL_TIMEOUT')), 12000); })]).finally(() => clearTimeout(timer))
+        ? await Promise.race([run, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('MODEL_TIMEOUT')), 20000); })]).finally(() => clearTimeout(timer))
         : await run;
       if (!voiceMode && typeof result?.getReader === 'function') {
         return new Response(result, {
@@ -79,15 +80,18 @@ export async function onRequestPost({ request, env }) {
       const answer = Array.isArray(rawAnswer) ? rawAnswer.map(part => typeof part === 'string' ? part : part?.text || '').join('').trim() : typeof rawAnswer === 'string' ? rawAnswer.trim() : '';
       if (answer) return json({ answer });
       lastError = new Error('AI_EMPTY_RESPONSE');
+      failures.push({ model, reason: 'EMPTY_RESPONSE' });
     } catch (error) {
       lastError = error;
-      // Provider error text may include internal details, so keep logs generic.
-      console.error('NOVA AI model failed:', model);
+      const reason = error?.message === 'MODEL_TIMEOUT' ? 'TIMEOUT' : (error?.status === 429 ? 'RATE_LIMIT' : (error?.status === 403 ? 'ACCESS_DENIED' : 'MODEL_ERROR'));
+      failures.push({ model, reason });
+      console.error('NOVA AI model failed', { model, reason, status: error?.status ?? null, code: error?.code ?? null });
     }
   }
   return json({
     error: 'Не вдалося отримати відповідь від основної або резервної AI-моделі. Можливо, сервіс тимчасово недоступний або вичерпано ліміт.',
-    code: 'AI_RUN_FAILED'
+    code: 'AI_RUN_FAILED',
+    failures
   }, 502);
 }
 
