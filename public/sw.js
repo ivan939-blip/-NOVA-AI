@@ -1,5 +1,7 @@
-const CACHE='nova-v6';
-const ASSETS=['./','./index.html','./manifest.webmanifest','./icon.svg'];
+const CACHE='nova-v7';
+// Vite fingerprints the manifest and icon at build time. Cache the stable shell
+// here; fetched fingerprinted assets are cached by the network-first handler.
+const ASSETS=['./','./index.html'];
 
 self.addEventListener('install',event=>event.waitUntil(
   caches.open(CACHE).then(cache=>cache.addAll(ASSETS)).then(()=>self.skipWaiting())
