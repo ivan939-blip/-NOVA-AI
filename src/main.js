@@ -42,7 +42,7 @@ let videoError = '';
 let musicTracks = store.get('nova-music-tracks', []);
 let musicNotice = '';
 let musicPrompt = '';
-const localVideoApi = (import.meta.env.VITE_LOCAL_VIDEO_API_URL || 'http://127.0.0.1:8189/api/video').replace(/\/$/, '');
+const localVideoApi = (import.meta.env.VITE_LOCAL_VIDEO_API_URL || '').replace(/\/$/, '');
 
 const audioStore = (() => {
   const open = () => new Promise((resolve, reject) => { const request=indexedDB.open('nova-audio',1); request.onupgradeneeded=()=>request.result.createObjectStore('tracks'); request.onsuccess=()=>resolve(request.result); request.onerror=()=>reject(request.error); });
@@ -79,6 +79,7 @@ function render(){ const hadAuth=Boolean($('.modal-backdrop')); $('#app').innerH
 async function generateImage(){
   const prompt=$('#image-prompt')?.value.trim();
   if(!prompt||imageBusy)return;
+  if (location.hostname.endsWith('github.io')) { imageError='GitHub Pages не підтримує Cloudflare Workers AI API. Для генерації відкрий Cloudflare Pages версію NOVA AI.'; render(); return; }
   imagePrompt=prompt;imageBusy=true;imageError='';imageResult='';render();
   const controller=new AbortController();
   const timeout=setTimeout(()=>controller.abort(),120000);
@@ -96,6 +97,7 @@ async function generateImage(){
   }finally{clearTimeout(timeout);imageBusy=false;render();}
 }
 async function askNOVA(text) {
+  if (location.hostname.endsWith('github.io')) { messages.push({role:'nova',text:'AI Chat потребує Cloudflare Workers AI. Відкрий NOVA AI на Cloudflare Pages, оскільки GitHub Pages не виконує /api/chat.'});persistChat();render();return; }
   chatBusy=true;
   render();
   const controller=new AbortController();
@@ -132,7 +134,7 @@ async function askNOVA(text) {
       const addChunk=(chunk)=>{
         if(!chunk) return;
         reply.text+=chunk;
-        if(replyEl) replyEl.textContent=reply.text;
+        if(replyEl) { const body=replyEl.querySelector('.message-body p'); if(body) body.textContent=reply.text; }
       };
       const parseEvent=(event)=>{
         const data=event.split(/\r?\n/).filter(line=>line.startsWith('data:')).map(line=>line.slice(5).trim()).join('\n');
@@ -188,6 +190,7 @@ async function loadCloudLibrary(){if(!session||!supabase)return;const {data,erro
 async function generateRealVideo() {
   const prompt = $('#video-prompt')?.value.trim();
   if (!prompt || videoBusy) return;
+  if (!localVideoApi) { videoError = 'Генерація відео потребує налаштованого VITE_LOCAL_VIDEO_API_URL та доступного відеосервера. Розкадрування й збереження сценарію працюють без сервера.'; videoStatus = ''; render(); return; }
   videoPrompt = prompt; videoBusy = true; videoStatus = 'Надсилаю запит...'; videoError = ''; videoUrl = ''; render();
   try {
     const res = await fetch(localVideoApi, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({prompt:prompt+' Style: '+videoStyle+'. Cinematic camera movement.',seconds:Math.max(4,Math.min(12,Number(videoDuration)||5)),aspect_ratio:videoRatio,image:imageResult||undefined}) });
