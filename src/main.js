@@ -70,6 +70,10 @@ let workPlan = '';
 let workStatus = '';
 let workBusy = false;
 let workDirectory = null;
+let workScopes = store.get('nova-work-scopes', { files:true, browser:false, apps:false });
+if(!workScopes || typeof workScopes !== 'object') workScopes={files:true,browser:false,apps:false};
+let workActionQueue = store.get('nova-work-action-queue', []);
+if(!Array.isArray(workActionQueue)) workActionQueue=[];
 const localVideoApi = (import.meta.env.VITE_LOCAL_VIDEO_API_URL || 'http://127.0.0.1:8189/api/video').replace(/\/$/, '');
 
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -260,8 +264,9 @@ async function createWorkPlan(){
   if(!task||workBusy)return;
   workBusy=true; workStatus='NOVA формує план…'; render();
   const inventory=workFiles.map(file=>`${file.name} (${file.type||'unknown'}, ${Math.ceil(file.size/1024)} KB)`).join('; ') || 'Файли не додані.';
+  const scope=Object.entries(workScopes).filter(([,enabled])=>enabled).map(([name])=>({files:'лише обрані файли та папки',browser:'браузерні кроки для ручного підтвердження',apps:'дії у програмах для ручного підтвердження'})[name]).join('; ') || 'лише план без доступу до зовнішніх систем';
   try {
-    const response=await fetch(`${import.meta.env.BASE_URL}api/chat`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({messages:[{role:'user',content:`Ти працюєш у режимі NOVA Work Mode. Створи стислий практичний план українською для завдання: ${task}\n\nДоступний лише інвентар файлів (не їхній вміст): ${inventory}\n\nНе стверджуй, що виконав дію. Запропонуй безпечні кроки, назви папок і перевірки.`} ]})});
+    const response=await fetch(`${import.meta.env.BASE_URL}api/chat`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({messages:[{role:'user',content:`Ти працюєш у режимі NOVA Work Mode. Створи стислий практичний план українською для завдання: ${task}\n\nДозволена область: ${scope}.\nДоступний лише інвентар файлів (не їхній вміст): ${inventory}\n\nНе стверджуй, що виконав дію. Для браузера, програм або змін у файлах запропонуй окремі кроки, які потребують явного підтвердження користувача.`} ]})});
     if(!response.ok) throw new Error('AI-сервер тимчасово недоступний.');
     const raw=await response.text();
     const answer=raw.split(/\r?\n\r?\n/).map(event=>event.split(/\r?\n/).filter(line=>line.startsWith('data:')).map(line=>line.slice(5).trim()).join('\n')).filter(data=>data&&data!=='[DONE]').map(data=>{try{const packet=JSON.parse(data);return packet?.choices?.[0]?.delta?.content||packet?.response||'';}catch{return '';}}).join('').trim();
@@ -428,6 +433,27 @@ function installNovaDirector(){
   director.querySelectorAll('[data-nova-focus]').forEach(button=>button.onclick=()=>{novaFocus=button.dataset.novaFocus;store.set('nova-director-focus',novaFocus);render();});
 }
 
+function installWorkConsole(){
+  const task=$('#work-task');
+  if(!task||$('#work-console'))return;
+  const console=document.createElement('section');
+  console.id='work-console';
+  console.className='work-console';
+  const queued=workActionQueue.length?`<ul>${workActionQueue.map(item=>`<li><b>${esc(item.title)}</b><small>Очікує твого окремого підтвердження</small></li>`).join('')}</ul>`:'';
+  console.innerHTML=`<b>КОНСОЛЬ ДІЙ NOVA</b><p>Обери, для чого підготувати кроки. NOVA не натискає кнопки, не керує програмами та не змінює дані без окремого підтвердження.</p><label><input type="checkbox" data-work-scope="files" ${workScopes.files?'checked':''}> Обрані файли й папки</label><label><input type="checkbox" data-work-scope="browser" ${workScopes.browser?'checked':''}> Браузер: підготувати дії та перевірки</label><label><input type="checkbox" data-work-scope="apps" ${workScopes.apps?'checked':''}> Програми: підготувати послідовність дій</label><button type="button" class="secondary" id="build-work-queue">＋ Створити список дій</button>${queued}`;
+  task.closest('label')?.after(console);
+  console.querySelectorAll('[data-work-scope]').forEach(input=>input.onchange=()=>{workScopes[input.dataset.workScope]=input.checked;store.set('nova-work-scopes',workScopes);});
+  console.querySelector('#build-work-queue')?.addEventListener('click',()=>{
+    const taskText=task.value.trim()||'Поточне завдання';
+    workActionQueue=[];
+    if(workScopes.files)workActionQueue.push({title:`Перевірити обрані файли для: ${taskText}`});
+    if(workScopes.browser)workActionQueue.push({title:'Відкрити та перевірити потрібні сторінки у браузері'});
+    if(workScopes.apps)workActionQueue.push({title:'Підготувати кроки у вибраних програмах'});
+    if(!workActionQueue.length)workActionQueue.push({title:'Уточнити область роботи перед будь-якою дією'});
+    store.set('nova-work-action-queue',workActionQueue);workStatus='Список дій сформовано. Кожну зовнішню дію NOVA виконує лише після окремого підтвердження.';render();
+  });
+}
+
 function installAdultCreativeControls(){
   const prompt=$('#adult-prompt');
   if(!prompt||$('#adult-creative-controls'))return;
@@ -443,6 +469,7 @@ function installAdultCreativeControls(){
 
 function bind(){
   installNovaDirector();
+  installWorkConsole();
   installAdultCreativeControls();
   $('#generate-real-video')?.addEventListener('click',generateRealVideo);
   document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>{active=b.dataset.go;render();});
