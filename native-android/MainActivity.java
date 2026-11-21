@@ -2,6 +2,14 @@ package ai.nova.studio;
 
 import android.Manifest;
 import android.content.Intent;
+import android.content.ContentValues;
+import android.content.ContentResolver;
+import android.net.Uri;
+import android.os.Build;
+import android.os.Environment;
+import android.provider.MediaStore;
+import android.util.Base64;
+import java.io.OutputStream;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.provider.Settings;
@@ -80,6 +88,38 @@ public class MainActivity extends BridgeActivity {
     return result[0];
   }
   public class VoiceBridge {
+    @JavascriptInterface public String saveImage(String dataUrl) {
+      try {
+        if(dataUrl == null || !dataUrl.startsWith("data:image/")) return "INVALID_IMAGE";
+        int comma = dataUrl.indexOf(',');
+        if(comma < 0 || !dataUrl.substring(0,comma).contains(";base64")) return "INVALID_IMAGE";
+        byte[] bytes = Base64.decode(dataUrl.substring(comma+1),Base64.DEFAULT);
+        if(bytes.length == 0 || bytes.length > 18000000) return "INVALID_IMAGE";
+        String mime = dataUrl.startsWith("data:image/jpeg") ? "image/jpeg" : "image/png";
+        String ext = mime.equals("image/jpeg") ? ".jpg" : ".png";
+        String filename = "NOVA-AI-" + System.currentTimeMillis() + ext;
+        ContentResolver resolver = getContentResolver();
+        ContentValues values = new ContentValues();
+        values.put(MediaStore.Images.Media.DISPLAY_NAME,filename);
+        values.put(MediaStore.Images.Media.MIME_TYPE,mime);
+        if(Build.VERSION.SDK_INT >= 29){
+          values.put(MediaStore.Images.Media.RELATIVE_PATH,Environment.DIRECTORY_PICTURES+"/NOVA AI");
+          values.put(MediaStore.Images.Media.IS_PENDING,1);
+        }
+        Uri uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,values);
+        if(uri == null) return "SAVE_FAILED";
+        try(OutputStream stream = resolver.openOutputStream(uri)){
+          if(stream == null) throw new Exception("Cannot open image destination");
+          stream.write(bytes);
+        }catch(Exception e){resolver.delete(uri,null,null);throw e;}
+        if(Build.VERSION.SDK_INT >= 29){
+          ContentValues ready = new ContentValues();
+          ready.put(MediaStore.Images.Media.IS_PENDING,0);
+          resolver.update(uri,ready,null,null);
+        }
+        return "OK";
+      }catch(Exception error){return "SAVE_FAILED";}
+    }
     @JavascriptInterface public void speak(String text) {
       runOnUiThread(() -> {
         if(tts == null){emit("speech-error","TTS unavailable");return;}
