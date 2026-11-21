@@ -29,7 +29,8 @@ export async function onRequestPost({ request, env }) {
     if (encodedImage) {
       const image = encodedImage.startsWith('data:image/')
         ? encodedImage
-        : 'data:image/png;base64,' + encodedImage;
+        // FLUX returns a base64-encoded JPEG string (not a PNG payload).
+        : 'data:image/jpeg;base64,' + encodedImage;
       return json({ image });
     }
     const payload = result?.image ?? result;
@@ -51,9 +52,14 @@ export async function onRequestPost({ request, env }) {
     return json({ image: 'data:image/png;base64,' + btoa(binary) });
   } catch (error) {
     console.error('NOVA image generation failed:', error);
+    const detail = String(error?.message || 'Unknown Workers AI error');
+    const quotaOrAccess = /quota|limit|neuron|billing|account|not enabled|not available/i.test(detail);
     return json({
-      error: 'Не вдалося створити зображення. Перевір ліміти Workers AI та доступність моделі.',
-      code: 'IMAGE_GENERATION_FAILED'
+      error: quotaOrAccess
+        ? 'Генерація зображень недоступна для цього Workers AI акаунта або вичерпано його ліміт.'
+        : 'Не вдалося створити зображення. Перевір доступність Workers AI моделі.',
+      code: quotaOrAccess ? 'IMAGE_QUOTA_OR_ACCESS' : 'IMAGE_GENERATION_FAILED',
+      diagnostic: { name: error?.name || 'Error', message: detail.slice(0, 240) }
     }, 502);
   }
 }

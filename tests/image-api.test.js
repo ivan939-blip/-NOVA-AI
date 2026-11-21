@@ -56,7 +56,7 @@ test('returns base64 image data from FLUX', async () => {
     } }
   });
   assert.equal(res.status, 200);
-  assert.equal((await res.json()).image, 'data:image/png;base64,YWJj');
+  assert.equal((await res.json()).image, 'data:image/jpeg;base64,YWJj');
 });
 
 test('converts binary image output to base64', async () => {
