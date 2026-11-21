@@ -29,15 +29,21 @@ public class MainActivity extends BridgeActivity {
         int support = tts.isLanguageAvailable(ukrainian);
         if (support >= TextToSpeech.LANG_AVAILABLE) {
           tts.setLanguage(ukrainian);
-          for (android.speech.tts.Voice voice : tts.getVoices()) {
-            if ("uk".equals(voice.getLocale().getLanguage()) && !voice.isNetworkConnectionRequired()) {
-              tts.setVoice(voice);
-              break;
+          java.util.Set<android.speech.tts.Voice> voices = tts.getVoices();
+          android.speech.tts.Voice preferred = null;
+          if (voices != null) {
+            for (android.speech.tts.Voice voice : voices) {
+              if (!"uk".equals(voice.getLocale().getLanguage())) continue;
+              if (preferred == null || (voice.getQuality() > preferred.getQuality()
+                  && voice.getLatency() <= android.speech.tts.Voice.LATENCY_NORMAL)) {
+                preferred = voice;
+              }
             }
           }
+          if (preferred != null) tts.setVoice(preferred);
         }
-        tts.setSpeechRate(0.92f);
-        tts.setPitch(1.04f);
+        tts.setSpeechRate(0.95f);
+        tts.setPitch(1.10f);
       }
     });
     handler.postDelayed(() -> {
