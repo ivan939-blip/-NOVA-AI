@@ -157,7 +157,7 @@ async function generateRealVideo() {
   if (!prompt || videoBusy) return;
   videoPrompt = prompt; videoBusy = true; videoStatus = 'Надсилаю запит...'; videoError = ''; videoUrl = ''; render();
   try {
-    const base = (import.meta.env.BASE_URL || '/').replace(/\\/$/, '');
+    const base = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
     const res = await fetch(`${base}/api/video`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({prompt:prompt+' Style: '+videoStyle+'. Cinematic camera movement.',seconds:Math.max(4,Math.min(12,Number(videoDuration)||5)),aspect_ratio:videoRatio}) });
     const data = await res.json().catch(()=>({}));
     if (!res.ok) throw new Error(data.error || data.message || 'Не вдалося запустити генерацію (HTTP '+res.status+').');
