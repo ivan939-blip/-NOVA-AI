@@ -14,10 +14,10 @@ const NOVA_AURAS = {
   cyber: 'electric neon cyberpunk aura, rain-slick reflections, magenta and ultraviolet light, balanced exposure and gentle facial fill light',
   ember: 'ember glow, crimson-violet contrast, cinematic smoke, soft fill light preserving texture in shadows'
 };
-const NOVA_LIGHTING = 'Professional cinematic exposure: clear facial features, natural skin tones, sharp eyes, detailed clothing and textures, subtle softbox fill light, controlled contrast, rich blacks without crushed shadows, no underexposure, no muddy silhouettes. Preserve the requested dark gothic mood and neon palette; do not wash out the scene.';
+const NOVA_LIGHTING = 'Professional cinematic exposure: clear facial features, natural skin tones, sharp eyes, detailed requested textures, subtle softbox fill light, controlled contrast, rich blacks without crushed shadows, no underexposure, no muddy silhouettes. Preserve the requested dark gothic mood and neon palette; do not wash out the scene.';
 const NOVA_FOCUS = {
   portrait: 'a deliberate intimate portrait composition with expressive eyes and a clean background',
-  fullbody: 'MANDATORY FULL BODY HEAD-TO-TOE WIDE SHOT: show the entire character from the top of the head to the soles of both shoes, including both feet, fully inside the image frame. Leave visible breathing room above the head and below the feet. Position the camera far enough away to fit the complete standing figure. No cropped head, legs, ankles, shoes or feet; no waist-up, bust, portrait or close-up framing. The character occupies approximately 75 to 85 percent of the image height.',
+  fullbody: 'MANDATORY FULL BODY HEAD-TO-TOE WIDE SHOT: show the entire character from the top of the head to the soles of both shoes, including both feet, fully inside the image frame. Do not introduce shoes, clothing, armor, masks or accessories unless requested. Leave visible breathing room above the head and below the feet. Position the camera far enough away to fit the complete standing figure. No cropped head, legs, ankles or feet; no waist-up, bust, portrait or close-up framing. The character occupies approximately 75 to 85 percent of the image height.',
   world: 'an expansive environmental composition where the world is as important as the subject'
 };
 
@@ -93,7 +93,7 @@ export async function onRequestPost({ request, env }) {
     if (reference) {
       const presentationInstruction = presentation === 'feminine' ? 'Use a feminine presentation for the person.' : presentation === 'masculine' ? 'Use a masculine presentation for the person.' : '';
       const identityInstruction = preserveFace ? 'Treat image 0 as the same person. Preserve their key facial characteristics, face shape, and identity while changing only the requested scene, styling, lighting, or clothing. Do not replace the person with a different face.' : '';
-      const modelPrompt = [NOVA_FOCUS[novaFocus], prompt, strictPrompt ? STRICT_PROMPT_SUFFIX : '', identityInstruction, presentationInstruction].filter(Boolean).join('\n\n');
+      const modelPrompt = [prompt, NOVA_FOCUS[novaFocus], strictPrompt ? STRICT_PROMPT_SUFFIX : '', identityInstruction, presentationInstruction].filter(Boolean).join('\n\n');
       const form = new FormData(); form.append('prompt', modelPrompt); form.append('seed',String(seed)); form.append('guidance','5'); form.append('input_image_0', new Blob([reference.bytes], {type:reference.type}), 'reference-image');
       const request = new Request('https://nova.local/image-reference', {method:'POST',body:form});
       result = await env.AI.run('@cf/black-forest-labs/flux-2-klein-4b', { multipart:{body:request.body,contentType:request.headers.get('content-type')} });
@@ -101,8 +101,9 @@ export async function onRequestPost({ request, env }) {
       const adultInstruction = adultMode
         ? `${requestedAdultContent ? 'Depict exactly one original, fictional, consenting adult age 25 or older' : 'Depict exactly one original, fictional model character age 25 or older'}${adultModel === 'unspecified' ? ' with the presentation requested by the user' : ` with a ${adultModel} presentation`}. Use a ${adultStyle === 'photorealistic' ? 'photorealistic high-end editorial fashion photography' : adultStyle === 'cinematic' ? 'photorealistic cinematic editorial photography' : 'photorealistic dark gothic editorial photography'} aesthetic. Never depict a real person or a minor.`
         : '';
-      const novaDirection = `NOVA Director: ${NOVA_AURAS[novaAura]}; ${NOVA_FOCUS[novaFocus]}. ${NOVA_LIGHTING}`;
-      const modelPrompt = [NOVA_FOCUS[novaFocus], prompt, adultInstruction, novaDirection, strictPrompt ? STRICT_PROMPT_SUFFIX : ''].filter(Boolean).join('\n\n');
+      const novaDirection = `Lighting and atmosphere only, subordinate to the user's description: ${NOVA_AURAS[novaAura]}. ${NOVA_LIGHTING}`;
+      const priorityInstruction = 'The user description is authoritative. Never replace the requested subject or outfit with a superhero, robot, armored figure, mask, helmet, bodysuit or futuristic costume unless explicitly requested. A visual mood is lighting and background, not permission to change the subject. Respect requested full-body framing.';
+      const modelPrompt = [prompt, NOVA_FOCUS[novaFocus], adultInstruction, priorityInstruction, strictPrompt ? STRICT_PROMPT_SUFFIX : '', novaDirection].filter(Boolean).join('\n\n');
       // FLUX.1 Schnell's published input schema accepts prompt and steps only.
       // Keep the UI seed as metadata, but do not send unsupported seed to the model.
       result = await env.AI.run('@cf/black-forest-labs/flux-1-schnell', {
