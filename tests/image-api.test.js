@@ -60,8 +60,8 @@ test('returns base64 image data from FLUX', async () => {
 });
 
 test('uses FLUX reference model for a valid uploaded image', async () => {
-  const res = await post(JSON.stringify({ prompt: 'turn image 0 into a violet portrait', referenceImage: 'data:image/jpeg;base64,YWJj' }), {
-    AI: { run: async (model, options) => { assert.equal(model, '@cf/black-forest-labs/flux-2-klein-4b'); assert.ok(options.multipart.body); assert.match(options.multipart.contentType, /multipart\/form-data/); return { image: 'YWJj' }; } }
+  const res = await post(JSON.stringify({ prompt: 'turn image 0 into a violet portrait', referenceImage: 'data:image/jpeg;base64,YWJj', presentation:'feminine', preserveFace:true }), {
+    AI: { run: async (model, options) => { assert.equal(model, '@cf/black-forest-labs/flux-2-klein-4b'); assert.ok(options.multipart.body); assert.match(options.multipart.contentType, /multipart\/form-data/); const form=await new Response(options.multipart.body,{headers:{'content-type':options.multipart.contentType}}).formData(); assert.match(form.get('prompt'),/same person/); assert.match(form.get('prompt'),/feminine presentation/); return { image: 'YWJj' }; } }
   });
   const body = await res.json(); assert.equal(res.status, 200); assert.equal(body.referenceUsed, true); assert.equal(body.image, 'data:image/jpeg;base64,YWJj');
 });

@@ -45,11 +45,16 @@ export async function onRequestPost({ request, env }) {
   let reference;
   try { reference = body.referenceImage === undefined ? null : decodeReference(body.referenceImage); } catch { return json({ error:'Референс-зображення завелике. Обери фото до 5 МБ — NOVA стисне його автоматично.', code:'REFERENCE_TOO_LARGE' },413); }
   if (body.referenceImage !== undefined && !reference) return json({ error:'Референсом може бути лише JPEG, PNG або WebP.', code:'INVALID_REFERENCE_IMAGE' },400);
+  const presentation = ['feminine','masculine','unspecified'].includes(body.presentation) ? body.presentation : 'unspecified';
+  const preserveFace = body.preserveFace === true;
   if (!env.AI) return json({ error: 'AI-ядро не підключене.', code: 'AI_BINDING_MISSING' }, 503);
   try {
     let result;
     if (reference) {
-      const form = new FormData(); form.append('prompt', prompt); form.append('input_image_0', new Blob([reference.bytes], {type:reference.type}), 'reference-image');
+      const presentationInstruction = presentation === 'feminine' ? 'Use a feminine presentation for the person.' : presentation === 'masculine' ? 'Use a masculine presentation for the person.' : '';
+      const identityInstruction = preserveFace ? 'Treat image 0 as the same person. Preserve their key facial characteristics, face shape, and identity while changing only the requested scene, styling, lighting, or clothing. Do not replace the person with a different face.' : '';
+      const modelPrompt = [prompt, identityInstruction, presentationInstruction].filter(Boolean).join('\n\n');
+      const form = new FormData(); form.append('prompt', modelPrompt); form.append('input_image_0', new Blob([reference.bytes], {type:reference.type}), 'reference-image');
       const request = new Request('https://nova.local/image-reference', {method:'POST',body:form});
       result = await env.AI.run('@cf/black-forest-labs/flux-2-klein-4b', { multipart:{body:request.body,contentType:request.headers.get('content-type')} });
     } else result = await env.AI.run('@cf/black-forest-labs/flux-1-schnell', { prompt, steps: 4 });
