@@ -2,5 +2,6 @@ node_modules/
 dist/
 .vite/
 .npm-cache/
+local-video-output/
 .env
 .env.local

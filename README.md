@@ -8,12 +8,12 @@ Mobile-first Gothic Cyberpunk AI Studio. The permanent purple-black heroine home
 - Cloudflare Pages Function for the NOVA chat API.
 - Cloudflare Workers AI integration (no OpenAI key required).
 - Image generation endpoint is implemented with Cloudflare Workers AI FLUX (deployment/limits must be verified).
-- Video idea drafts can be saved locally. Optional, fully local Wan2.1 rendering uses ComfyUI and has no hosted API key, subscription, or usage limit.
+- Video idea drafts can be saved locally. Local Motion Forge creates a free MP4 with animated camera movement, neon styling, and ambient audio.
 - Character selection and a local 18+ mode toggle.
 - Optional Supabase sign-in and cloud library (requires a free Supabase project).
 - PWA shell and GitHub Pages design preview.
 
-Image generation is implemented in Image Studio via Cloudflare Pages Functions and Workers AI FLUX. Video Studio always supports local storyboard drafts. Video rendering is deliberately local: it sends jobs to a Wan2.1 workflow in ComfyUI running on the same computer, through the included companion server. No paid video API is used.
+Image generation is implemented in Image Studio via Cloudflare Pages Functions and Workers AI FLUX. Video Studio always supports local storyboard drafts. Video rendering is deliberately local: the companion server uses FFmpeg on the same computer, with no paid video API or GPU model.
 
 ## Free deployment: Cloudflare Pages + Workers AI
 
@@ -26,14 +26,13 @@ The repository contains a Cloudflare Pages config (`wrangler.toml`) and Pages Fu
 5. Redeploy the project. Open `https://YOUR-PROJECT.pages.dev/api/health`. It should return JSON with `"ai": true`.
 6. Open the site and test the Chat tab.
 
-### Free local video rendering: Wan2.1 + ComfyUI
+### Free local video rendering: Motion Forge
 
-This path has no account, API key, subscription, or hosted usage quota. It uses your own computer's GPU and electricity. A modern NVIDIA GPU with at least 8 GB VRAM is the practical minimum for the Wan2.1 1.3B model at 480p.
+This path has no account, API key, subscription, GPU model, or hosted usage quota. It uses a bundled FFmpeg binary locally and works on this computer's CPU.
 
-1. Install [ComfyUI](https://www.comfy.org/) locally and install/download the [Wan2.1 1.3B model](https://github.com/Wan-Video/Wan2.1).
-2. Build a working Wan2.1 workflow in ComfyUI, save it in **API format** as `comfyui/wan2.1-api-workflow.json`, and put `{{NOVA_PROMPT}}` in its text prompt node. Optional placeholders are `{{NOVA_SECONDS}}` and `{{NOVA_ASPECT_RATIO}}`.
-3. Start ComfyUI on `http://127.0.0.1:8188`, then in this project run `npm run video:local`. The companion server listens only on `127.0.0.1:8189` by default.
-4. Open NOVA in the browser on the same computer. The **Генерувати локально (Wan2.1)** button will queue the job, poll its progress, and display the finished file.
+1. In this project run `npm install`, then `npm run video:local`.
+2. Open NOVA in the browser on the same computer. The **Створити безкоштовне відео** button queues a local MP4 job, polls its progress, and displays the file.
+3. If an Image Studio image exists in the current session, Motion Forge uses it as the source for a slow cinematic camera move. Otherwise, it creates a NOVA neon motion background with ambient audio.
 
 The default companion CORS policy permits `https://nova-ai-7qd.pages.dev` and Vite's local server. To use a different NOVA domain, set `NOVA_ALLOWED_ORIGINS=https://your-domain.example` before starting it. To use another companion URL, set `VITE_LOCAL_VIDEO_API_URL` at build time.
 
