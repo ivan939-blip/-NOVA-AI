@@ -105,6 +105,17 @@ test('uses an original photorealistic model instruction for a non-explicit 18+ c
   assert.equal(res.status, 200);
 });
 
+test('does not mistake non-explicit wording for an explicit adult request', async () => {
+  const res = await post(JSON.stringify({ prompt: 'non-explicit fictional fashion model, age 25', adultMode: true }), {
+    AI: { run: async (_model, options) => {
+      assert.match(options.prompt, /fictional model character age 25 or older/);
+      assert.doesNotMatch(options.prompt, /consenting adult/);
+      return { image: 'YWJj' };
+    } }
+  });
+  assert.equal(res.status, 200);
+});
+
 test('reports a clear provider restriction for a rejected explicit adult request', async () => {
   const res = await post(JSON.stringify({ prompt: 'erotic adult portrait', adultMode: true }), {
     AI: { run: async () => { throw new Error('model safety rejection'); } }

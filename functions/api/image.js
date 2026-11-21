@@ -9,6 +9,12 @@ const PROHIBITED_ADULT_TERMS = /(minor|child|teen(?:ager)?|underage|schoolgirl|s
 const MAX_SEED = 9_999_999_999;
 const STRICT_PROMPT_SUFFIX = 'Follow every explicit detail in the request exactly: subject, attributes, count, composition, colors, clothing and scene. Do not add people, text, logos, objects or style elements not requested. If a detail is unspecified, keep it simple and unobtrusive.';
 
+function requestsAdultContent(prompt) {
+  // “non-explicit” describes a safe image and must not be mistaken for a request
+  // for explicit content. Other adult terms (for example “nude”) are retained.
+  return ADULT_TERMS.test(prompt.replace(/\bnon[-\s]?explicit\b/giu, ''));
+}
+
 function validSeed(value) {
   const seed = Number(value);
   return Number.isInteger(seed) && seed >= 1 && seed <= MAX_SEED ? seed : Math.floor(Math.random() * MAX_SEED) + 1;
@@ -57,7 +63,7 @@ export async function onRequestPost({ request, env }) {
   try { reference = body.referenceImage === undefined ? null : decodeReference(body.referenceImage); } catch { return json({ error:'Референс-зображення завелике. Обери фото до 5 МБ — NOVA стисне його автоматично.', code:'REFERENCE_TOO_LARGE' },413); }
   if (body.referenceImage !== undefined && !reference) return json({ error:'Референсом може бути лише JPEG, PNG або WebP.', code:'INVALID_REFERENCE_IMAGE' },400);
   const adultMode = body.adultMode === true;
-  const requestedAdultContent = ADULT_TERMS.test(prompt);
+  const requestedAdultContent = requestsAdultContent(prompt);
   if (PROHIBITED_ADULT_TERMS.test(prompt)) return json({ error:'NOVA не створює сексуалізований контент за участі неповнолітніх.', code:'MINORS_NOT_ALLOWED' },400);
   if (requestedAdultContent && !adultMode) return json({ error:'Для повнолітнього контенту спершу ввімкни 18+ Mode.', code:'ADULT_MODE_REQUIRED' },403);
   if (adultMode && reference) return json({ error:'Для приватної 18+ генерації не можна використовувати фото-референси реальних людей.', code:'ADULT_REFERENCE_NOT_ALLOWED' },400);
