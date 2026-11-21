@@ -8,7 +8,7 @@ Mobile-first Gothic Cyberpunk AI Studio. The permanent purple-black heroine home
 - Cloudflare Pages Function for the NOVA chat API.
 - Cloudflare Workers AI integration (no OpenAI key required).
 - Image generation endpoint is implemented with Cloudflare Workers AI FLUX (deployment/limits must be verified).
-- Video idea drafts can be saved locally. Local Motion Forge creates a free MP4 with animated camera movement, neon styling, and ambient audio.
+- Video idea drafts can be saved locally. Local Motion Forge creates a free MP4 from an image or NOVA neon background, with styling and ambient audio.
 - Character selection and a local 18+ mode toggle.
 - Optional Supabase sign-in and cloud library (requires a free Supabase project).
 - PWA shell and GitHub Pages design preview.
@@ -32,7 +32,7 @@ This path has no account, API key, subscription, GPU model, or hosted usage quot
 
 1. In this project run `npm install`, then `npm run video:local`.
 2. Open NOVA in the browser on the same computer. The **Створити безкоштовне відео** button queues a local MP4 job, polls its progress, and displays the file.
-3. If an Image Studio image exists in the current session, Motion Forge uses it as the source for a slow cinematic camera move. Otherwise, it creates a NOVA neon motion background with ambient audio.
+3. If an Image Studio image exists in the current session, Motion Forge uses it as the source frame. Otherwise, it creates a NOVA neon motion background with ambient audio.
 
 The default companion CORS policy permits `https://nova-ai-7qd.pages.dev` and Vite's local server. To use a different NOVA domain, set `NOVA_ALLOWED_ORIGINS=https://your-domain.example` before starting it. To use another companion URL, set `VITE_LOCAL_VIDEO_API_URL` at build time.
 
