@@ -84,7 +84,7 @@ function scheduleNextVoiceTurn(sessionId){
   },500);
 }
 function speakNOVA(text){
-  if(!voiceOutputSupported){setVoiceNotice('Голос NOVA недоступний у цьому браузері. Спробуй Chrome і перевір голосовий рушій Android.');return false;}
+  if(!voiceOutputSupported&&!nativeVoice()){setVoiceNotice('Голос NOVA недоступний у цьому браузері. Спробуй Chrome і перевір голосовий рушій Android.');return false;}
   if(!text)return false;
   const sessionId=voiceSessionId;
   if(nativeVoice()){
@@ -387,7 +387,7 @@ function bind(){
   $('#open-voice-room')?.addEventListener('click',()=>{active='voice';render();});
   $('#chat-voice-mode')?.addEventListener('click',()=>{active='voice';render();});
   $('#voice-back')?.addEventListener('click',()=>{stopVoiceRoom();active='chat';render();});
-  $('#voice-room-start')?.addEventListener('click',()=>{unlockNOVAVoice();if(!voiceInputSupported){setVoiceNotice('На цьому Android WebView голосове введення недоступне. Відкрий NOVA AI у Chrome.');return;}if(!voiceOutputSupported){setVoiceNotice('На цьому пристрої недоступне озвучення. Перевір налаштування синтезу мовлення Android.');return;}if(voiceConversationMode){if(!voiceListening&&!chatBusy)startVoiceInput();return;}voiceSessionId++;voiceConversationMode=true;voiceAutoSpeak=true;voiceSendAfterRecognition=true;store.set('nova-voice-conversation-mode',true);store.set('nova-voice-autospeak',true);store.set('nova-voice-send-after-recognition',true);render();startVoiceInput();});
+  $('#voice-room-start')?.addEventListener('click',()=>{unlockNOVAVoice();if(!voiceInputSupported&&!nativeVoice()){setVoiceNotice('На цьому Android WebView голосове введення недоступне. Відкрий NOVA AI у Chrome.');return;}if(!voiceOutputSupported&&!nativeVoice()){setVoiceNotice('На цьому пристрої недоступне озвучення. Перевір налаштування синтезу мовлення Android.');return;}if(voiceConversationMode){if(!voiceListening&&!chatBusy)startVoiceInput();return;}voiceSessionId++;voiceConversationMode=true;voiceAutoSpeak=true;voiceSendAfterRecognition=true;store.set('nova-voice-conversation-mode',true);store.set('nova-voice-autospeak',true);store.set('nova-voice-send-after-recognition',true);render();startVoiceInput();});
   $('#voice-room-stop')?.addEventListener('click',()=>{stopVoiceRoom();render();});
   $('#voice-room-test')?.addEventListener('click',()=>{unlockNOVAVoice();speakNOVA('Привіт! Я NOVA. Тепер ми можемо розмовляти голосом.');});
   $('#voice-input')?.addEventListener('click',startVoiceInput);
