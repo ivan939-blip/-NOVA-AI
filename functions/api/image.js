@@ -58,7 +58,13 @@ export async function onRequestPost({ request, env }) {
       const request = new Request('https://nova.local/image-reference', {method:'POST',body:form});
       result = await env.AI.run('@cf/black-forest-labs/flux-2-klein-4b', { multipart:{body:request.body,contentType:request.headers.get('content-type')} });
     } else result = await env.AI.run('@cf/black-forest-labs/flux-1-schnell', { prompt, steps: 4 });
-    return json({ image: await outputDataUrl(result), referenceUsed:Boolean(reference) });
+    return json({
+      image: await outputDataUrl(result),
+      referenceUsed: Boolean(reference),
+      // Echo only the server-validated options; this is never inferred from the photo.
+      presentationApplied: reference ? presentation : null,
+      preserveFaceApplied: Boolean(reference && preserveFace)
+    });
   } catch (error) {
     console.error('NOVA image generation failed:', error);
     const detail = String(error?.message || 'Unknown Workers AI error');
