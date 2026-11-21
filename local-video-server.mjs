@@ -1,5 +1,5 @@
 import { createServer } from 'node:http';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, rm } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { spawn } from 'node:child_process';
@@ -10,6 +10,8 @@ const host = '127.0.0.1';
 const outputDir = resolve('local-video-output');
 const allowedOrigins = new Set((process.env.NOVA_ALLOWED_ORIGINS || 'https://nova-ai-7qd.pages.dev,http://localhost:5173').split(',').map(x => x.trim()));
 const jobs = new Map();
+const RENDER_TIMEOUT_MS = 120_000;
+const RESULT_TTL_MS = 24 * 60 * 60 * 1_000;
 
 function send(res, status, body, origin) {
   const headers = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' };
@@ -33,8 +35,12 @@ async function parseBody(req) {
 function execFfmpeg(args) {
   return new Promise((resolveRun, reject) => {
     const child = spawn(ffmpegPath, args, { windowsHide: true }); let error = '';
-    child.stderr.on('data', chunk => { error += chunk; }); child.on('error', reject);
-    child.on('close', code => code === 0 ? resolveRun() : reject(new Error(error.slice(-1200))));
+    const timeout = setTimeout(() => child.kill('SIGKILL'), RENDER_TIMEOUT_MS);
+    child.stderr.on('data', chunk => { error += chunk; }); child.on('error', error => { clearTimeout(timeout); reject(error); });
+    child.on('close', code => {
+      clearTimeout(timeout);
+      code === 0 ? resolveRun() : reject(new Error(error.slice(-1200) || 'FFmpeg timed out or failed'));
+    });
   });
 }
 function unpackImage(value, id) {
@@ -59,7 +65,12 @@ async function render(job, image) {
     args = ['-y', '-f', 'lavfi', '-i', `color=c=0x10071d:s=${size}:r=24`, '-f', 'lavfi', '-i', 'sine=frequency=55:sample_rate=44100', '-filter_complex', `[0:v]drawgrid=width=56:height=56:thickness=1:color=0x8c4dff@0.13,eq=contrast=1.12:saturation=1.3,drawtext=text='${title}':fontcolor=0xdcc8ff@0.9:fontsize=20:x=28:y=h-55[v]`, '-map', '[v]', '-map', '1:a'];
   }
   args.push('-t', String(job.seconds), '-r', '24', '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '64k', '-af', 'volume=0.035', '-movflags', '+faststart', target);
-  await execFfmpeg(args); job.file = `nova-${job.id}.mp4`; job.status = 'completed';
+  try {
+    await execFfmpeg(args); job.file = `nova-${job.id}.mp4`; job.status = 'completed';
+    setTimeout(() => { jobs.delete(job.id); rm(target, { force: true }).catch(() => {}); }, RESULT_TTL_MS);
+  } finally {
+    if (image) await rm(resolve(outputDir, image.name), { force: true });
+  }
 }
 
 createServer(async (req, res) => {
