@@ -6,7 +6,7 @@
   "background_color": "#10071d",
   "theme_color": "#10071d",
   "icons": [
-    { "src": "./nova-heroine.png", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/nova-heroine.png", "type": "image/png", "purpose": "any maskable" },
     { "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
   ]
 }
