@@ -2,6 +2,8 @@ const json = (body, status = 200) => Response.json(body, { status, headers: { 'C
 const MAX_BODY_CHARS = 1_500_000;
 const MAX_PROMPT_CHARS = 1_800;
 const MAX_REFERENCE_BYTES = 1_000_000;
+const ADULT_TERMS = /\b(erotic|erotica|nude|nudity|naked|explicit|sex(?:ual)?|porn|nsfw|оголен|еротич|інтим|секс|порно)\b/i;
+const PROHIBITED_ADULT_TERMS = /\b(minor|child|teen(?:ager)?|underage|schoolgirl|schoolboy|loli|неповноліт|дитин|підлітк|школяр)\b/i;
 
 function imageDataUrl(result) {
   const encodedImage = typeof result?.image === 'string' ? result.image : typeof result === 'string' ? result : null;
@@ -45,6 +47,10 @@ export async function onRequestPost({ request, env }) {
   let reference;
   try { reference = body.referenceImage === undefined ? null : decodeReference(body.referenceImage); } catch { return json({ error:'Референс-зображення завелике. Обери фото до 5 МБ — NOVA стисне його автоматично.', code:'REFERENCE_TOO_LARGE' },413); }
   if (body.referenceImage !== undefined && !reference) return json({ error:'Референсом може бути лише JPEG, PNG або WebP.', code:'INVALID_REFERENCE_IMAGE' },400);
+  const adultMode = body.adultMode === true;
+  if (PROHIBITED_ADULT_TERMS.test(prompt)) return json({ error:'NOVA не створює сексуалізований контент за участі неповнолітніх.', code:'MINORS_NOT_ALLOWED' },400);
+  if (ADULT_TERMS.test(prompt) && !adultMode) return json({ error:'Для повнолітнього контенту спершу ввімкни 18+ Mode.', code:'ADULT_MODE_REQUIRED' },403);
+  if (adultMode && reference) return json({ error:'Для приватної 18+ генерації не можна використовувати фото-референси реальних людей.', code:'ADULT_REFERENCE_NOT_ALLOWED' },400);
   const presentation = ['feminine','masculine','unspecified'].includes(body.presentation) ? body.presentation : 'unspecified';
   const preserveFace = body.preserveFace === true;
   if (!env.AI) return json({ error: 'AI-ядро не підключене.', code: 'AI_BINDING_MISSING' }, 503);
@@ -57,7 +63,7 @@ export async function onRequestPost({ request, env }) {
       const form = new FormData(); form.append('prompt', modelPrompt); form.append('input_image_0', new Blob([reference.bytes], {type:reference.type}), 'reference-image');
       const request = new Request('https://nova.local/image-reference', {method:'POST',body:form});
       result = await env.AI.run('@cf/black-forest-labs/flux-2-klein-4b', { multipart:{body:request.body,contentType:request.headers.get('content-type')} });
-    } else result = await env.AI.run('@cf/black-forest-labs/flux-1-schnell', { prompt, steps: 4 });
+    } else result = await env.AI.run('@cf/black-forest-labs/flux-1-schnell', { prompt: adultMode ? `Depict only consenting fictional adults. ${prompt}` : prompt, steps: 4 });
     return json({
       image: await outputDataUrl(result),
       referenceUsed: Boolean(reference),

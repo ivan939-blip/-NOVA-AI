@@ -71,6 +71,16 @@ test('rejects unsafe reference formats before invoking AI', async () => {
   assert.equal(res.status,400); assert.equal((await res.json()).code,'INVALID_REFERENCE_IMAGE'); assert.equal(invoked,false);
 });
 
+test('requires 18+ mode for adult prompts and blocks minor or reference misuse', async () => {
+  const env={AI:{run:async()=>({image:'YWJj'})}};
+  const required=await post(JSON.stringify({prompt:'erotic portrait'}),env);
+  assert.equal(required.status,403); assert.equal((await required.json()).code,'ADULT_MODE_REQUIRED');
+  const minor=await post(JSON.stringify({prompt:'nude teenager',adultMode:true}),env);
+  assert.equal(minor.status,400); assert.equal((await minor.json()).code,'MINORS_NOT_ALLOWED');
+  const reference=await post(JSON.stringify({prompt:'erotic portrait',adultMode:true,referenceImage:'data:image/jpeg;base64,YWJj'}),env);
+  assert.equal(reference.status,400); assert.equal((await reference.json()).code,'ADULT_REFERENCE_NOT_ALLOWED');
+});
+
 test('converts binary image output to base64', async () => {
   const res = await post(JSON.stringify({ prompt: 'moonlit castle' }), {
     AI: { run: async () => new Uint8Array([97, 98, 99]) }
