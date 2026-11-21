@@ -230,6 +230,7 @@ async function createWorkPlan(){
 function downloadWorkPlan(){ const blob=new Blob([workPlan],{type:'text/plain;charset=utf-8'}); const url=URL.createObjectURL(blob); const link=document.createElement('a');link.href=url;link.download='nova-work-plan.txt';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000); }
 async function saveWorkPlan(){ if(!workDirectory||!workPlan)return; try{const file=await workDirectory.getFileHandle('nova-work-plan.txt',{create:true});const writer=await file.createWritable();await writer.write(workPlan);await writer.close();workStatus='План записано в обрану папку як nova-work-plan.txt.';}catch(error){workStatus='Не вдалося записати файл у папку.';}render(); }
 async function askNOVA(text) {
+  const requestVoiceSession=voiceConversationMode?voiceSessionId:null;
   if(voiceConversationMode)setVoicePhase('thinking');
   chatBusy=true;
   render();
@@ -315,7 +316,7 @@ async function askNOVA(text) {
     persistChat();
     const newestReply=messages.slice().reverse().find(message=>message.role==='nova');
     render();
-    if((voiceAutoSpeak||voiceConversationMode)&&newestReply?.text&&newestReply.text!==welcomeMessage.text&&!newestReply.text.startsWith('ДІАГНОСТИКА:')) speakNOVA(newestReply.text);
+    if((requestVoiceSession===null?voiceAutoSpeak:(voiceConversationMode&&requestVoiceSession===voiceSessionId))&&newestReply?.text&&newestReply.text!==welcomeMessage.text&&!newestReply.text.startsWith('ДІАГНОСТИКА:')) speakNOVA(newestReply.text);
     else if(voiceConversationMode)setVoicePhase('idle');
   }
 }
