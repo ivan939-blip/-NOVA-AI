@@ -25,7 +25,19 @@ public class MainActivity extends BridgeActivity {
     super.onCreate(savedInstanceState);
     tts = new TextToSpeech(this, status -> {
       if (status == TextToSpeech.SUCCESS) {
-        tts.setLanguage(new Locale("uk", "UA"));
+        Locale ukrainian = new Locale("uk", "UA");
+        int support = tts.isLanguageAvailable(ukrainian);
+        if (support >= TextToSpeech.LANG_AVAILABLE) {
+          tts.setLanguage(ukrainian);
+          for (android.speech.tts.Voice voice : tts.getVoices()) {
+            if ("uk".equals(voice.getLocale().getLanguage()) && !voice.isNetworkConnectionRequired()) {
+              tts.setVoice(voice);
+              break;
+            }
+          }
+        }
+        tts.setSpeechRate(0.92f);
+        tts.setPitch(1.04f);
       }
     });
     handler.postDelayed(() -> {
@@ -48,7 +60,10 @@ public class MainActivity extends BridgeActivity {
           @Override public void onDone(String id){emit("speech-end","");}
           @Override public void onError(String id){emit("speech-error","Android TTS error");}
         });
-        tts.speak(text,TextToSpeech.QUEUE_FLUSH,null,"nova-reply");
+        String spoken = text.replaceAll("\\s+", " ").trim();
+        if (spoken.isEmpty()) { emit("speech-end",""); return; }
+        int result = tts.speak(spoken,TextToSpeech.QUEUE_FLUSH,null,"nova-reply");
+        if(result == TextToSpeech.ERROR) emit("speech-error","Не вдалося запустити озвучення.");
       });
     }
     @JavascriptInterface public void stopSpeaking(){runOnUiThread(() -> {if(tts!=null)tts.stop();});}
