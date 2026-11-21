@@ -37,6 +37,17 @@ jobs:
         run: npm install --no-save --package-lock=false @capacitor/core@7 @capacitor/cli@7 @capacitor/android@7
       - name: Generate Android project
         run: npx cap add android
+      - name: Add native NOVA voice support
+        run: |
+          mkdir -p android/app/src/main/java/ai/nova/studio
+          cp native-android/MainActivity.java android/app/src/main/java/ai/nova/studio/MainActivity.java
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('android/app/src/main/AndroidManifest.xml')
+          s=p.read_text()
+          s=s.replace('<application', '<uses-permission android:name="android.permission.RECORD_AUDIO" />\n    <queries><intent><action android:name="android.speech.RecognitionService" /></intent></queries>\n    <application',1)
+          p.write_text(s)
+          PY
       - name: Build debug APK
         working-directory: android
         run: bash gradlew assembleDebug --no-daemon
