@@ -3,7 +3,6 @@ const MAX_BODY_CHARS = 20_000;
 const MAX_PROMPT_CHARS = 1_800;
 
 export async function onRequestPost({ request, env }) {
-  if (!env.AI) return json({ error: 'AI-ядро не підключене.', code: 'AI_BINDING_MISSING' }, 503);
   let rawBody;
   let body;
   try {
@@ -19,6 +18,7 @@ export async function onRequestPost({ request, env }) {
   const prompt = typeof body.prompt === 'string' ? body.prompt.trim() : '';
   if (!prompt) return json({ error: 'Напиши опис зображення.', code: 'PROMPT_REQUIRED' }, 400);
   if (prompt.length > MAX_PROMPT_CHARS) return json({ error: 'Опис має бути не довшим за 1800 символів.', code: 'PROMPT_TOO_LONG' }, 400);
+  if (!env.AI) return json({ error: 'AI-ядро не підключене.', code: 'AI_BINDING_MISSING' }, 503);
   try {
     const result = await env.AI.run('@cf/black-forest-labs/flux-1-schnell', { prompt, steps: 4 });
     const encodedImage = typeof result?.image === 'string'
