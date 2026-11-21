@@ -45,6 +45,7 @@ let videoPrompt = '';
 let videoDuration = '8';
 let videoRatio = '9:16';
 let videoStyle = 'dark cinematic';
+let videoMotion = 'push-in';
 let videoStoryboard = '';
 let videoBusy = false;
 let videoStatus = '';
@@ -407,7 +408,7 @@ async function generateRealVideo() {
   if (!prompt || videoBusy) return;
   videoPrompt = prompt; videoBusy = true; videoStatus = 'Надсилаю запит...'; videoError = ''; videoUrl = ''; render();
   try {
-    const res = await fetch(localVideoApi, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({prompt:prompt+' Style: '+videoStyle+'. Cinematic camera movement.',seconds:Math.max(4,Math.min(12,Number(videoDuration)||5)),aspect_ratio:videoRatio,image:imageResult||undefined}) });
+    const res = await fetch(localVideoApi, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({prompt:prompt+' Style: '+videoStyle+'. Camera: '+videoMotion+'.',seconds:Math.max(4,Math.min(12,Number(videoDuration)||5)),aspect_ratio:videoRatio,motion:videoMotion,image:imageResult||undefined}) });
     const data = await res.json().catch(()=>({}));
     if (!res.ok) throw new Error(data.error || data.message || 'Не вдалося запустити генерацію (HTTP '+res.status+').');
     const id=data.video_id||data.id||data.data?.video_id; if(!id) throw new Error('API не повернув video_id.');
@@ -427,6 +428,15 @@ async function generateRealVideo() {
   } catch(e) { videoError=e.message||'Помилка генерації відео.'; videoStatus=''; }
   finally { videoBusy=false; render(); }
 }
+function installVideoMotionControls(){
+  const prompt=$('#video-prompt');
+  if(!prompt||$('#video-motion-controls'))return;
+  const controls=document.createElement('section');controls.id='video-motion-controls';controls.className='video-motion-controls';
+  controls.innerHTML=`<b>РУХ КАМЕРИ MOTION FORGE</b><small>${imageResult?'Буде застосовано до поточного зображення з Image Studio.':'Без зображення NOVA створить анімований неоновий фон.'}</small><div class="chips"><button type="button" data-video-motion="push-in" class="${videoMotion==='push-in'?'selected':''}">Наближення</button><button type="button" data-video-motion="pan-left" class="${videoMotion==='pan-left'?'selected':''}">Панорама ←</button><button type="button" data-video-motion="pan-right" class="${videoMotion==='pan-right'?'selected':''}">Панорама →</button><button type="button" data-video-motion="drift" class="${videoMotion==='drift'?'selected':''}">Плавний дрейф</button></div>`;
+  prompt.closest('label')?.after(controls);
+  controls.querySelectorAll('[data-video-motion]').forEach(button=>button.onclick=()=>{videoMotion=button.dataset.videoMotion;render();});
+}
+
 function installImageComposer(){
   const prompt=$('#image-prompt');
   if(!prompt||$('#image-composer'))return;
@@ -556,6 +566,7 @@ function installAdultCreativeControls(){
 }
 
 function bind(){
+  installVideoMotionControls();
   installImageComposer();
   installNovaDirector();
   installWorkConsole();

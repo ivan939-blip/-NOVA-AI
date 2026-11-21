@@ -62,7 +62,15 @@ async function render(job, image) {
   let args;
   if (image) {
     const source = resolve(outputDir, image.name); await writeFile(source, image.data);
-    args = ['-y', '-loop', '1', '-i', source, '-f', 'lavfi', '-i', 'sine=frequency=55:sample_rate=44100', '-filter_complex', `[0:v]scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height},eq=contrast=1.08:saturation=1.18,fade=t=in:st=0:d=0.5,drawtext=text='${title}':fontcolor=white@0.8:fontsize=18:x=28:y=h-55[v]`, '-map', '[v]', '-map', '1:a'];
+    const frames = Math.max(1, job.seconds * 24);
+    const motion = job.motion === 'pan-left'
+      ? `zoompan=z='1.12':x='(iw-iw/zoom)*(1-on/${frames})':y='ih/2-(ih/zoom/2)':d=1:s=${size}:fps=24`
+      : job.motion === 'pan-right'
+      ? `zoompan=z='1.12':x='(iw-iw/zoom)*on/${frames}':y='ih/2-(ih/zoom/2)':d=1:s=${size}:fps=24`
+      : job.motion === 'drift'
+      ? `zoompan=z='1.08+0.025*sin(on/18)':x='iw/2-(iw/zoom/2)+10*sin(on/15)':y='ih/2-(ih/zoom/2)+8*cos(on/19)':d=1:s=${size}:fps=24`
+      : `zoompan=z='min(zoom+0.00075,1.12)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:s=${size}:fps=24`;
+    args = ['-y', '-loop', '1', '-i', source, '-f', 'lavfi', '-i', 'sine=frequency=55:sample_rate=44100', '-filter_complex', `[0:v]scale=${width * 2}:${height * 2}:force_original_aspect_ratio=increase,crop=${width * 2}:${height * 2},${motion},eq=contrast=1.08:saturation=1.18,fade=t=in:st=0:d=0.5,drawtext=text='${title}':fontcolor=white@0.8:fontsize=18:x=28:y=h-55[v]`, '-map', '[v]', '-map', '1:a'];
   } else {
     args = ['-y', '-f', 'lavfi', '-i', `color=c=0x10071d:s=${size}:r=24`, '-f', 'lavfi', '-i', 'sine=frequency=55:sample_rate=44100', '-filter_complex', `[0:v]drawgrid=width=56:height=56:thickness=1:color=0x8c4dff@0.13,eq=contrast=1.12:saturation=1.3,drawtext=text='${title}':fontcolor=0xdcc8ff@0.9:fontsize=20:x=28:y=h-55[v]`, '-map', '[v]', '-map', '1:a'];
   }
@@ -86,7 +94,7 @@ createServer(async (req, res) => {
       if (!prompt) return send(res, 400, { error: 'Опиши відео.', code: 'PROMPT_REQUIRED' }, origin);
       if (prompt.length > 1800) return send(res, 400, { error: 'Опис має бути не довшим за 1800 символів.', code: 'PROMPT_TOO_LONG' }, origin);
       if ([...jobs.values()].filter(job => job.status === 'processing').length >= MAX_CONCURRENT_RENDERS) return send(res, 429, { error: 'Локальний рендер зайнятий двома завданнями. Зачекай завершення одного з них.', code: 'RENDER_QUEUE_FULL' }, origin);
-      const id = randomUUID(); const job = { id, status: 'processing', seconds: Math.max(4, Math.min(12, Number(input.seconds) || 5)), aspectRatio: ['16:9', '1:1', '9:16'].includes(input.aspect_ratio) ? input.aspect_ratio : '9:16' }; jobs.set(id, job);
+      const id = randomUUID(); const job = { id, status: 'processing', seconds: Math.max(4, Math.min(12, Number(input.seconds) || 5)), aspectRatio: ['16:9', '1:1', '9:16'].includes(input.aspect_ratio) ? input.aspect_ratio : '9:16', motion: ['push-in','pan-left','pan-right','drift'].includes(input.motion) ? input.motion : 'push-in' }; jobs.set(id, job);
       render(job, unpackImage(input.image, id)).catch(error => { console.error(error); job.status = 'failed'; job.error = 'Не вдалося зібрати MP4 локально.'; setTimeout(() => jobs.delete(id), RESULT_TTL_MS); });
       return send(res, 202, { video_id: id, provider: 'local-motion-forge' }, origin);
     }
@@ -96,14 +104,14 @@ createServer(async (req, res) => {
       if (job.status === 'failed') return send(res, 500, { error: job.error, code: 'LOCAL_RENDER_FAILED' }, origin);
       return send(res, 200, job.status === 'completed' ? { status: 'completed', video_url: `http://${host}:${port}/media/${job.file}` } : { status: 'processing' }, origin);
     }
-    if (url.pathname.startsWith('/media/') && req.method === 'GET') {
+    if (url.pathname.startsWith('/media/') && ['GET', 'HEAD'].includes(req.method)) {
       const name = url.pathname.slice(7);
       if (!/^nova-[a-f0-9-]+\.mp4$/i.test(name)) return send(res, 400, { code: 'INVALID_MEDIA_PATH' }, origin);
       let video;
       try { video = await readFile(resolve(outputDir, name)); } catch (error) { if (error?.code === 'ENOENT') return send(res, 404, { error: 'Відеофайл уже недоступний.', code: 'VIDEO_FILE_NOT_FOUND' }, origin); throw error; }
       const headers = { 'Content-Type': 'video/mp4', 'Content-Length': video.length, 'Cache-Control': 'no-store' };
       if (origin && allowedOrigins.has(origin)) headers['Access-Control-Allow-Origin'] = origin;
-      res.writeHead(200, headers); return res.end(video);
+      res.writeHead(200, headers); return req.method === 'HEAD' ? res.end() : res.end(video);
     }
     return send(res, 404, { error: 'Not found.' }, origin);
   } catch (error) {
