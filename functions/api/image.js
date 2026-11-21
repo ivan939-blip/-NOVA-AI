@@ -6,7 +6,7 @@ const MAX_REFERENCE_BYTES = 1_000_000;
 // boundaries. Match stems directly so the same policy applies in every supported language.
 const ADULT_TERMS = /(erotic|erotica|nude|nudity|naked|explicit|sex(?:ual)?|porn|nsfw|оголен|еротич|інтим|секс|порно)/iu;
 const PROHIBITED_ADULT_TERMS = /(minor|child|teen(?:ager)?|underage|schoolgirl|schoolboy|loli|неповноліт|дитин|підлітк|школяр)/iu;
-const MAX_SEED = 9_999_999_999;
+const MAX_SEED = 4_294_967_295;
 const STRICT_PROMPT_SUFFIX = 'Follow every explicit detail in the request exactly: subject, attributes, count, composition, colors, clothing and scene. Do not add people, text, logos, objects or style elements not requested. If a detail is unspecified, keep it simple and unobtrusive.';
 const NOVA_AURAS = {
   violet: 'violet neon aura, deep black shadows, luminous purple highlights',
@@ -102,17 +102,13 @@ export async function onRequestPost({ request, env }) {
         : '';
       const novaDirection = `NOVA Director: ${NOVA_AURAS[novaAura]}; ${NOVA_FOCUS[novaFocus]}.`;
       const modelPrompt = [adultInstruction, novaDirection, prompt, strictPrompt ? STRICT_PROMPT_SUFFIX : ''].filter(Boolean).join('\n\n');
-      try {
-        result = await env.AI.run('@cf/black-forest-labs/flux-1-schnell', { prompt: modelPrompt, seed, steps: 4 });
-      } catch (seedError) {
-        const reason = String(seedError?.message || '');
-        // Some Workers AI accounts expose FLUX but reject the optional seed field.
-        // Keep image creation available and report that reproducibility was unavailable.
-        if (/quota|neuron|billing|rate.limit|capacity|not allowed|account not|model not found|no such model/i.test(reason)) throw seedError;
-        // Provider validation errors are sometimes generic; retry once with the minimal supported payload.
-        result = await env.AI.run('@cf/black-forest-labs/flux-1-schnell', { prompt: modelPrompt, steps: 4 });
-        seedApplied = false;
-      }
+      // FLUX.1 Schnell's published input schema accepts prompt and steps only.
+      // Keep the UI seed as metadata, but do not send unsupported seed to the model.
+      result = await env.AI.run('@cf/black-forest-labs/flux-1-schnell', {
+        prompt: modelPrompt.slice(0, 2048),
+        steps: 4
+      });
+      seedApplied = false;
     }
     return json({
       image: await outputDataUrl(result),
