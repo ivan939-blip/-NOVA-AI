@@ -49,7 +49,7 @@ jobs:
           mkdir -p android/app/src/main/java/ai/nova/studio
           cp native-android/MainActivity.java android/app/src/main/java/ai/nova/studio/MainActivity.java
           python3 -c 'from pathlib import Path; p=Path("android/app/src/main/AndroidManifest.xml"); s=p.read_text(); s=s.replace("<application", """<uses-permission android:name="android.permission.RECORD_AUDIO" />
-              <queries><intent><action android:name="android.speech.RecognitionService" /></intent></queries>
+              <queries><intent><action android:name="android.speech.RecognitionService" /></intent><package android:name="com.android.chrome" /><package android:name="com.google.android.youtube" /><package android:name="com.google.android.apps.maps" /></queries>
               <application""",1); s=s.replace("android:name=\".MainActivity\"", "android:name=\"ai.nova.studio.MainActivity\""); p.write_text(s)'
       - name: Build debug APK
         working-directory: android

@@ -186,6 +186,7 @@ function startVoiceInput(){
 
 window.addEventListener('nova-native-voice',event=>{
   const {type,value}=event.detail||{};
+  if(type==='apps-ready'){loadDesktopApplications();return;}
   if(type==='speech-start'){setVoicePhase('speaking');setVoiceNotice('NOVA говорить…');}
   if(type==='speech-end'){setVoicePhase('idle');if(voiceConversationMode)scheduleNextVoiceTurn(voiceSessionId);}
   if(type==='speech-error'){setVoicePhase('idle');setVoiceNotice('Помилка озвучення Android: '+(value||'невідомо'));}
@@ -436,13 +437,14 @@ function installNovaDirector(){
 }
 
 async function loadDesktopApplications(){
-  if(!window.NovaDesktop?.listApplications)return;
-  try { workDesktopApps=await window.NovaDesktop.listApplications(); render(); } catch { workDesktopApps=[]; }
+  const bridge=window.NovaDesktop||window.NovaVoice;
+  if(!bridge?.listApplications)return;
+  try { const listed=await bridge.listApplications();workDesktopApps=Array.isArray(listed)?listed:JSON.parse(listed);render(); } catch { workDesktopApps=[]; }
 }
 
 function findSpokenApplication(command){
   const text=command.toLowerCase();
-  const aliases={chrome:['chrome','хром','гугл'],edge:['edge','едж','майкрософт'],explorer:['провідник','папк'],notepad:['блокнот','notepad'],calculator:['калькулятор','calc']};
+  const aliases={chrome:['chrome','хром','гугл'],edge:['edge','едж','майкрософт'],explorer:['провідник','папк'],notepad:['блокнот','notepad'],calculator:['калькулятор','calc'],youtube:['youtube','ютуб'],maps:['maps','мап','карти'],settings:['налаштуван','settings']};
   return workDesktopApps.find(app=>(aliases[app.id]||[app.label.toLowerCase()]).some(alias=>text.includes(alias)));
 }
 
@@ -486,7 +488,8 @@ function installWorkConsole(){
   const queued=workActionQueue.length?`<ul>${workActionQueue.map(item=>`<li><b>${esc(item.title)}</b><small>Очікує твого окремого підтвердження</small></li>`).join('')}</ul>`:'';
   console.innerHTML=`<b>КОНСОЛЬ ДІЙ NOVA</b><p>Обери, для чого підготувати кроки. NOVA не натискає кнопки, не керує програмами та не змінює дані без окремого підтвердження.</p><button type="button" class="secondary" id="work-voice-command">🎙 Сказати команду</button><small id="work-voice-notice">Скажи, наприклад: «Відкрий сайт і підготуй перевірку» або «Запусти програму та створи список кроків».</small><label><input type="checkbox" data-work-scope="files" ${workScopes.files?'checked':''}> Обрані файли й папки</label><label><input type="checkbox" data-work-scope="browser" ${workScopes.browser?'checked':''}> Браузер: підготувати дії та перевірки</label><label><input type="checkbox" data-work-scope="apps" ${workScopes.apps?'checked':''}> Програми: підготувати послідовність дій</label><button type="button" class="secondary" id="build-work-queue">＋ Створити список дій</button>${queued}`;
   task.closest('label')?.after(console);
-  if(window.NovaDesktop){
+  const appBridge=window.NovaDesktop||window.NovaVoice;
+  if(appBridge?.openApplication){
     const launcher=document.createElement('div');
     launcher.className='work-app-launcher';
     launcher.innerHTML=`<label>Програма для відкриття<select id="work-app-select"><option value="">Обери програму…</option>${workDesktopApps.map(app=>`<option value="${esc(app.id)}" ${workPendingApp===app.id?'selected':''}>${esc(app.label)}</option>`).join('')}</select></label><button type="button" class="secondary" id="open-work-app" ${workPendingApp?'':'disabled'}>↗ Підтвердити відкриття</button>`;
@@ -498,9 +501,9 @@ function installWorkConsole(){
   console.querySelector('#work-voice-command')?.addEventListener('click',startWorkVoiceCommand);
   console.querySelector('#work-app-select')?.addEventListener('change',event=>{workPendingApp=event.target.value;updatePendingAppUI();});
   console.querySelector('#open-work-app')?.addEventListener('click',async()=>{
-    const appInfo=workDesktopApps.find(app=>app.id===workPendingApp);if(!appInfo||!window.NovaDesktop)return;
-    if(!window.confirm(`Відкрити «${appInfo.label}» на цьому комп’ютері?`))return;
-    const result=await window.NovaDesktop.openApplication(appInfo.id);
+    const appInfo=workDesktopApps.find(app=>app.id===workPendingApp);if(!appInfo||!appBridge)return;
+    if(!window.confirm(`Відкрити «${appInfo.label}» на цьому пристрої?`))return;
+    const opened=await appBridge.openApplication(appInfo.id);const result=typeof opened==='string'?JSON.parse(opened):opened;
     workStatus=result.ok?`Відкрито: ${result.label}.`:(result.error||'Не вдалося відкрити програму.');render();
   });
   console.querySelector('#build-work-queue')?.addEventListener('click',()=>{

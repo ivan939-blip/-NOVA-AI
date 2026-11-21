@@ -12,4 +12,6 @@ The Android app needs internet access. It loads the live Cloudflare Pages deploy
 
 The debug APK is for testing, not Google Play release. For distribution, create a properly signed release APK/AAB, establish a permanent app ID, icons, and privacy policy, and verify the deployment and runtime functions.
 
+In **NOVA Work Mode** the Android app supports voice-assisted, confirmed opening of installed Google Chrome, YouTube, Google Maps and Android Settings. Say the program name, verify the selected application, then confirm the launch. NOVA does not install apps, execute arbitrary Android commands or open apps without confirmation.
+
 This workflow is manually triggered to avoid unnecessary Android builds. It does not modify Cloudflare settings or secrets.

@@ -4,6 +4,7 @@ import android.Manifest;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
+import android.provider.Settings;
 import android.speech.RecognitionListener;
 import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
@@ -14,6 +15,8 @@ import androidx.core.app.ActivityCompat;
 import com.getcapacitor.BridgeActivity;
 import java.util.ArrayList;
 import java.util.Locale;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 public class MainActivity extends BridgeActivity {
   private TextToSpeech tts;
@@ -48,13 +51,33 @@ public class MainActivity extends BridgeActivity {
     });
     handler.postDelayed(() -> {
       WebView web = getBridge().getWebView();
-      if (web != null) web.addJavascriptInterface(new VoiceBridge(), "NovaVoice");
+      if (web != null) { web.addJavascriptInterface(new VoiceBridge(), "NovaVoice"); emit("apps-ready", ""); }
     }, 250);
   }
   private void emit(String type, String value) {
     String js = "window.dispatchEvent(new CustomEvent('nova-native-voice',{detail:{type:"+
       org.json.JSONObject.quote(type)+",value:"+org.json.JSONObject.quote(value)+"}}));";
     runOnUiThread(() -> { if(getBridge()!=null && getBridge().getWebView()!=null) getBridge().getWebView().evaluateJavascript(js,null); });
+  }
+  private String launchPackage(String packageName) {
+    Intent launch=getPackageManager().getLaunchIntentForPackage(packageName);
+    if(launch==null)return null;
+    launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+    startActivity(launch); return "ok";
+  }
+  private String openApplication(String id) {
+    final String[] result={"{\"ok\":false,\"error\":\"Програма недоступна на цьому телефоні.\"}"};
+    CountDownLatch latch=new CountDownLatch(1);
+    runOnUiThread(() -> { try {
+      String label=null, launched=null;
+      if("chrome".equals(id)){label="Google Chrome";launched=launchPackage("com.android.chrome");}
+      else if("youtube".equals(id)){label="YouTube";launched=launchPackage("com.google.android.youtube");}
+      else if("maps".equals(id)){label="Google Maps";launched=launchPackage("com.google.android.apps.maps");}
+      else if("settings".equals(id)){label="Налаштування";startActivity(new Intent(Settings.ACTION_SETTINGS));launched="ok";}
+      if(launched!=null)result[0]="{\"ok\":true,\"label\":"+org.json.JSONObject.quote(label)+"}";
+    } catch(Exception ignored) {} finally { latch.countDown(); } });
+    try { latch.await(3,TimeUnit.SECONDS); } catch(InterruptedException ignored) { Thread.currentThread().interrupt(); }
+    return result[0];
   }
   public class VoiceBridge {
     @JavascriptInterface public void speak(String text) {
@@ -110,6 +133,16 @@ public class MainActivity extends BridgeActivity {
       });
     }
     @JavascriptInterface public void stopListening(){runOnUiThread(() -> {cancelled=true;if(recognizer!=null){recognizer.cancel();recognizer.destroy();recognizer=null;}});}
+    @JavascriptInterface public String listApplications(){
+      org.json.JSONArray apps=new org.json.JSONArray();
+      try {
+        if(getPackageManager().getLaunchIntentForPackage("com.android.chrome")!=null)apps.put(new org.json.JSONObject().put("id","chrome").put("label","Google Chrome"));
+        if(getPackageManager().getLaunchIntentForPackage("com.google.android.youtube")!=null)apps.put(new org.json.JSONObject().put("id","youtube").put("label","YouTube"));
+        if(getPackageManager().getLaunchIntentForPackage("com.google.android.apps.maps")!=null)apps.put(new org.json.JSONObject().put("id","maps").put("label","Google Maps"));
+        apps.put(new org.json.JSONObject().put("id","settings").put("label","Налаштування"));
+      } catch(Exception ignored) {} return apps.toString();
+    }
+    @JavascriptInterface public String openApplication(String id){return MainActivity.this.openApplication(id);}
   }
   @Override public void onDestroy(){if(recognizer!=null)recognizer.destroy();if(tts!=null){tts.stop();tts.shutdown();}super.onDestroy();}
 }
