@@ -102,3 +102,4 @@
 @keyframes nova-voice-think{0%,100%{height:10px;opacity:.5}50%{height:27px;opacity:1}}
 @keyframes nova-voice-glow{from{box-shadow:0 0 8px #8133aa55}to{box-shadow:0 0 24px #b347d799}}
 @media(prefers-reduced-motion:reduce){.nova-voice-room .voice-visualizer span,.nova-voice-room .voice-room-hero{animation:none!important}}
+.image-control-row{display:flex;align-items:end;gap:8px;flex-wrap:wrap;margin:12px 0}.image-control-row .identity-toggle{margin:0}.image-seed{flex:1;min-width:128px}.image-seed input{display:block;width:100%;margin-top:5px;padding:8px;color:#f9efff;background:#100817;border:1px solid #513066;border-radius:8px;outline:0}.image-control-row .secondary{width:auto;margin:0;padding:9px 11px;font-size:12px}

@@ -47,21 +47,23 @@ test('rejects prompts over the allowed limit', async () => {
   assert.equal(invoked, false);
 });
 
-test('returns base64 image data from FLUX', async () => {
-  const res = await post(JSON.stringify({ prompt: 'moonlit castle' }), {
+test('returns base64 image data from FLUX with a reproducible seed', async () => {
+  const res = await post(JSON.stringify({ prompt: 'moonlit castle', seed: 12345 }), {
     AI: { run: async (model, options) => {
       assert.equal(model, '@cf/black-forest-labs/flux-1-schnell');
       assert.equal(options.steps, 4);
+      assert.equal(options.seed, 12345);
+      assert.match(options.prompt, /Follow every explicit detail/);
       return { image: 'YWJj' };
     } }
   });
   assert.equal(res.status, 200);
-  assert.equal((await res.json()).image, 'data:image/jpeg;base64,YWJj');
+  const body=await res.json(); assert.equal(body.image, 'data:image/jpeg;base64,YWJj'); assert.equal(body.seed,12345); assert.equal(body.strictPromptApplied,true);
 });
 
 test('uses FLUX reference model for a valid uploaded image', async () => {
   const res = await post(JSON.stringify({ prompt: 'turn image 0 into a violet portrait', referenceImage: 'data:image/jpeg;base64,YWJj', presentation:'feminine', preserveFace:true }), {
-    AI: { run: async (model, options) => { assert.equal(model, '@cf/black-forest-labs/flux-2-klein-4b'); assert.ok(options.multipart.body); assert.match(options.multipart.contentType, /multipart\/form-data/); const form=await new Response(options.multipart.body,{headers:{'content-type':options.multipart.contentType}}).formData(); assert.match(form.get('prompt'),/same person/); assert.match(form.get('prompt'),/feminine presentation/); return { image: 'YWJj' }; } }
+    AI: { run: async (model, options) => { assert.equal(model, '@cf/black-forest-labs/flux-2-klein-4b'); assert.ok(options.multipart.body); assert.match(options.multipart.contentType, /multipart\/form-data/); const form=await new Response(options.multipart.body,{headers:{'content-type':options.multipart.contentType}}).formData(); assert.match(form.get('prompt'),/same person/); assert.match(form.get('prompt'),/feminine presentation/); assert.equal(form.get('guidance'),'5'); assert.match(form.get('seed'),/^\d+$/); return { image: 'YWJj' }; } }
   });
   const body = await res.json(); assert.equal(res.status, 200); assert.equal(body.referenceUsed, true); assert.equal(body.presentationApplied,'feminine'); assert.equal(body.preserveFaceApplied,true); assert.equal(body.image, 'data:image/jpeg;base64,YWJj');
 });
