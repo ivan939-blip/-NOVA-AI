@@ -79,6 +79,10 @@ test('requires 18+ mode for adult prompts and blocks minor or reference misuse',
   assert.equal(minor.status,400); assert.equal((await minor.json()).code,'MINORS_NOT_ALLOWED');
   const reference=await post(JSON.stringify({prompt:'erotic portrait',adultMode:true,referenceImage:'data:image/jpeg;base64,YWJj'}),env);
   assert.equal(reference.status,400); assert.equal((await reference.json()).code,'ADULT_REFERENCE_NOT_ALLOWED');
+  const ukrainianAdult=await post(JSON.stringify({prompt:'еротичний портрет'}),env);
+  assert.equal(ukrainianAdult.status,403); assert.equal((await ukrainianAdult.json()).code,'ADULT_MODE_REQUIRED');
+  const ukrainianMinor=await post(JSON.stringify({prompt:'оголений неповнолітній персонаж',adultMode:true}),env);
+  assert.equal(ukrainianMinor.status,400); assert.equal((await ukrainianMinor.json()).code,'MINORS_NOT_ALLOWED');
 });
 
 test('converts binary image output to base64', async () => {

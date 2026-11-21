@@ -2,8 +2,10 @@ const json = (body, status = 200) => Response.json(body, { status, headers: { 'C
 const MAX_BODY_CHARS = 1_500_000;
 const MAX_PROMPT_CHARS = 1_800;
 const MAX_REFERENCE_BYTES = 1_000_000;
-const ADULT_TERMS = /\b(erotic|erotica|nude|nudity|naked|explicit|sex(?:ual)?|porn|nsfw|оголен|еротич|інтим|секс|порно)\b/i;
-const PROHIBITED_ADULT_TERMS = /\b(minor|child|teen(?:ager)?|underage|schoolgirl|schoolboy|loli|неповноліт|дитин|підлітк|школяр)\b/i;
+// JavaScript's \b is ASCII-oriented and does not reliably recognize Ukrainian word
+// boundaries. Match stems directly so the same policy applies in every supported language.
+const ADULT_TERMS = /(erotic|erotica|nude|nudity|naked|explicit|sex(?:ual)?|porn|nsfw|оголен|еротич|інтим|секс|порно)/iu;
+const PROHIBITED_ADULT_TERMS = /(minor|child|teen(?:ager)?|underage|schoolgirl|schoolboy|loli|неповноліт|дитин|підлітк|школяр)/iu;
 
 function imageDataUrl(result) {
   const encodedImage = typeof result?.image === 'string' ? result.image : typeof result === 'string' ? result : null;

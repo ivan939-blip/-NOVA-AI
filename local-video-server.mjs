@@ -12,6 +12,7 @@ const allowedOrigins = new Set((process.env.NOVA_ALLOWED_ORIGINS || 'https://nov
 const jobs = new Map();
 const RENDER_TIMEOUT_MS = 120_000;
 const RESULT_TTL_MS = 24 * 60 * 60 * 1_000;
+const MAX_CONCURRENT_RENDERS = 2;
 
 function send(res, status, body, origin) {
   const headers = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' };
@@ -28,8 +29,9 @@ function allowed(req, res) {
   return false;
 }
 async function parseBody(req) {
-  let raw = '';
-  for await (const chunk of req) { raw += chunk; if (raw.length > 12_000_000) throw new Error('REQUEST_TOO_LARGE'); }
+  const chunks = []; let bytes = 0;
+  for await (const chunk of req) { bytes += chunk.length; if (bytes > 12_000_000) throw new Error('REQUEST_TOO_LARGE'); chunks.push(chunk); }
+  const raw = Buffer.concat(chunks).toString('utf8');
   try { return JSON.parse(raw); } catch { throw new Error('INVALID_JSON'); }
 }
 function execFfmpeg(args) {
@@ -83,8 +85,9 @@ createServer(async (req, res) => {
       const input = await parseBody(req); const prompt = typeof input?.prompt === 'string' ? input.prompt.trim() : '';
       if (!prompt) return send(res, 400, { error: 'Опиши відео.', code: 'PROMPT_REQUIRED' }, origin);
       if (prompt.length > 1800) return send(res, 400, { error: 'Опис має бути не довшим за 1800 символів.', code: 'PROMPT_TOO_LONG' }, origin);
+      if ([...jobs.values()].filter(job => job.status === 'processing').length >= MAX_CONCURRENT_RENDERS) return send(res, 429, { error: 'Локальний рендер зайнятий двома завданнями. Зачекай завершення одного з них.', code: 'RENDER_QUEUE_FULL' }, origin);
       const id = randomUUID(); const job = { id, status: 'processing', seconds: Math.max(4, Math.min(12, Number(input.seconds) || 5)), aspectRatio: ['16:9', '1:1', '9:16'].includes(input.aspect_ratio) ? input.aspect_ratio : '9:16' }; jobs.set(id, job);
-      render(job, unpackImage(input.image, id)).catch(error => { console.error(error); job.status = 'failed'; job.error = 'Не вдалося зібрати MP4 локально.'; });
+      render(job, unpackImage(input.image, id)).catch(error => { console.error(error); job.status = 'failed'; job.error = 'Не вдалося зібрати MP4 локально.'; setTimeout(() => jobs.delete(id), RESULT_TTL_MS); });
       return send(res, 202, { video_id: id, provider: 'local-motion-forge' }, origin);
     }
     if (url.pathname === '/api/video' && req.method === 'GET') {
@@ -96,8 +99,11 @@ createServer(async (req, res) => {
     if (url.pathname.startsWith('/media/') && req.method === 'GET') {
       const name = url.pathname.slice(7);
       if (!/^nova-[a-f0-9-]+\.mp4$/i.test(name)) return send(res, 400, { code: 'INVALID_MEDIA_PATH' }, origin);
-      const video = await readFile(resolve(outputDir, name));
-      res.writeHead(200, { 'Content-Type': 'video/mp4', 'Content-Length': video.length }); return res.end(video);
+      let video;
+      try { video = await readFile(resolve(outputDir, name)); } catch (error) { if (error?.code === 'ENOENT') return send(res, 404, { error: 'Відеофайл уже недоступний.', code: 'VIDEO_FILE_NOT_FOUND' }, origin); throw error; }
+      const headers = { 'Content-Type': 'video/mp4', 'Content-Length': video.length, 'Cache-Control': 'no-store' };
+      if (origin && allowedOrigins.has(origin)) headers['Access-Control-Allow-Origin'] = origin;
+      res.writeHead(200, headers); return res.end(video);
     }
     return send(res, 404, { error: 'Not found.' }, origin);
   } catch (error) {
