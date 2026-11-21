@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "scripts": { "dev": "vite", "build": "vite build", "test": "node --test", "preview": "vite preview" },
+  "scripts": { "dev": "vite", "build": "vite build", "test": "node --test", "preview": "vite preview", "video:local": "node local-video-server.mjs" },
   "dependencies": { "@supabase/supabase-js": "^2.98.0" },
   "devDependencies": { "vite": "^7.2.6" }
 }
