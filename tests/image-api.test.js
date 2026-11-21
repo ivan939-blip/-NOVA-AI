@@ -61,6 +61,12 @@ test('returns base64 image data from FLUX with a reproducible seed', async () =>
   const body=await res.json(); assert.equal(body.image, 'data:image/jpeg;base64,YWJj'); assert.equal(body.seed,12345); assert.equal(body.strictPromptApplied,true);
 });
 
+test('falls back to image generation without seed only when the provider rejects seed', async () => {
+  let calls=0;
+  const res=await post(JSON.stringify({prompt:'moon',seed:42}),{AI:{run:async (_model,options)=>{calls++;if(options.seed)throw new Error('seed validation failed');assert.equal(options.seed,undefined);return {image:'YWJj'};}}});
+  const body=await res.json(); assert.equal(res.status,200); assert.equal(calls,2); assert.equal(body.seedApplied,false);
+});
+
 test('uses FLUX reference model for a valid uploaded image', async () => {
   const res = await post(JSON.stringify({ prompt: 'turn image 0 into a violet portrait', referenceImage: 'data:image/jpeg;base64,YWJj', presentation:'feminine', preserveFace:true }), {
     AI: { run: async (model, options) => { assert.equal(model, '@cf/black-forest-labs/flux-2-klein-4b'); assert.ok(options.multipart.body); assert.match(options.multipart.contentType, /multipart\/form-data/); const form=await new Response(options.multipart.body,{headers:{'content-type':options.multipart.contentType}}).formData(); assert.match(form.get('prompt'),/same person/); assert.match(form.get('prompt'),/feminine presentation/); assert.equal(form.get('guidance'),'5'); assert.match(form.get('seed'),/^\d+$/); return { image: 'YWJj' }; } }

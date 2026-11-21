@@ -246,7 +246,7 @@ async function generateImage(){
     const data=await res.json().catch(()=>({}));
     if(!res.ok)throw new Error(data.error||data.code||'Сервер не повернув зображення.');
     if(typeof data.image!=='string'||!data.image.startsWith('data:image/'))throw new Error('Сервер повернув некоректне зображення.');
-    imageResult=data.image;if(Number.isInteger(data.seed)){imageSeed=data.seed;store.set('nova-image-seed',imageSeed);}
+    imageResult=data.image;if(Number.isInteger(data.seed)){imageSeed=data.seed;store.set('nova-image-seed',imageSeed);}if(data.seedApplied===false)imageError='Workers AI створив зображення без seed: повтор того самого варіанта зараз недоступний для цього акаунта.';
   }catch(e){
     imageError=e.name==='AbortError'?'Генерація перевищила 2 хвилини. Спробуй коротший опис або повтори пізніше.':e.message||'Не вдалося згенерувати зображення.';
   }finally{clearTimeout(timeout);imageBusy=false;render();}

@@ -66,7 +66,7 @@ export async function onRequestPost({ request, env }) {
   const seed = validSeed(body.seed);
   if (!env.AI) return json({ error: 'AI-ядро не підключене.', code: 'AI_BINDING_MISSING' }, 503);
   try {
-    let result;
+    let result; let seedApplied = true;
     if (reference) {
       const presentationInstruction = presentation === 'feminine' ? 'Use a feminine presentation for the person.' : presentation === 'masculine' ? 'Use a masculine presentation for the person.' : '';
       const identityInstruction = preserveFace ? 'Treat image 0 as the same person. Preserve their key facial characteristics, face shape, and identity while changing only the requested scene, styling, lighting, or clothing. Do not replace the person with a different face.' : '';
@@ -76,12 +76,22 @@ export async function onRequestPost({ request, env }) {
       result = await env.AI.run('@cf/black-forest-labs/flux-2-klein-4b', { multipart:{body:request.body,contentType:request.headers.get('content-type')} });
     } else {
       const modelPrompt = [adultMode ? 'Depict only consenting fictional adults.' : '', prompt, strictPrompt ? STRICT_PROMPT_SUFFIX : ''].filter(Boolean).join('\n\n');
-      result = await env.AI.run('@cf/black-forest-labs/flux-1-schnell', { prompt: modelPrompt, seed, steps: 4 });
+      try {
+        result = await env.AI.run('@cf/black-forest-labs/flux-1-schnell', { prompt: modelPrompt, seed, steps: 4 });
+      } catch (seedError) {
+        const reason = String(seedError?.message || '');
+        // Some Workers AI accounts expose FLUX but reject the optional seed field.
+        // Keep image creation available and report that reproducibility was unavailable.
+        if (!/seed|schema|validation|invalid input|unsupported/i.test(reason)) throw seedError;
+        result = await env.AI.run('@cf/black-forest-labs/flux-1-schnell', { prompt: modelPrompt, steps: 4 });
+        seedApplied = false;
+      }
     }
     return json({
       image: await outputDataUrl(result),
       referenceUsed: Boolean(reference),
       seed,
+      seedApplied,
       strictPromptApplied: strictPrompt,
       // Echo only the server-validated options; this is never inferred from the photo.
       presentationApplied: reference ? presentation : null,
