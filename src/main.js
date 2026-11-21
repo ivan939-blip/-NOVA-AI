@@ -271,6 +271,17 @@ async function formatImagePortrait916(source){
 async function downloadGeneratedImage(){
   if(!imageResult)return;
   try{
+    if(typeof window.NovaVoice?.saveImage==='function'){
+      const saved=window.NovaVoice.saveImage(imageResult);
+      if(saved==='OK'){
+        imageError='✓ Зображення збережено у Галерея → Pictures → NOVA AI.';
+        render();
+        return;
+      }
+      imageError='Android не зміг зберегти файл у галерею ('+saved+').';
+      render();
+      return;
+    }
     const response=await fetch(imageResult);
     const blob=await response.blob();
     const type=blob.type||'image/png';
