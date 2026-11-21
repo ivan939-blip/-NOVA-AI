@@ -275,7 +275,7 @@ async function askNOVA(text) {
   let reply=null;
   try {
     const history=(voiceConversationMode?messages.slice(-8):messages)
-      .filter((m,i)=>!(i===0&&m.role==='nova')&&!(i===messages.length-1&&m.role==='user'&&m.text===text))
+      .filter((m,i,items)=>!(i===0&&m.role==='nova')&&!(i===items.length-1&&m.role==='user'&&m.text===text))
       .map(m=>({role:m.role==='nova'?'assistant':'user',content:m.text}));
     const result=await fetch(`${import.meta.env.BASE_URL}api/chat`,{
       method:'POST',
@@ -354,7 +354,7 @@ async function askNOVA(text) {
     }
   } catch(error) {
     const detail=error?.name==='AbortError'
-      ? 'Час очікування вичерпано (90 секунд). Потік AI-сервера не завершився.'
+      ? `Час очікування вичерпано (${voiceConversationMode?45:90} секунд). AI-сервер не завершив відповідь.`
       : error?.message?.includes('Failed to fetch')
         ? 'Не вдалося з’єднатися з /api/chat. Перевір інтернет і адресу розгортання.'
         : `Помилка AI: ${error?.message || 'невідома помилка'}`;
