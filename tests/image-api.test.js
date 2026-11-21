@@ -93,16 +93,26 @@ test('requires 18+ mode for adult prompts and blocks minor or reference misuse',
   assert.equal(ukrainianMinor.status,400); assert.equal((await ukrainianMinor.json()).code,'MINORS_NOT_ALLOWED');
 });
 
-test('uses an original photorealistic adult model instruction after age gating', async () => {
+test('uses an original photorealistic model instruction for a non-explicit 18+ character', async () => {
   const res = await post(JSON.stringify({ prompt: 'elegant masculine fashion pose', adultMode: true, adultModel: 'masculine', adultStyle: 'cinematic' }), {
     AI: { run: async (_model, options) => {
-      assert.match(options.prompt, /original, fictional, consenting adult age 25 or older/);
+      assert.match(options.prompt, /original, fictional model character age 25 or older/);
       assert.match(options.prompt, /masculine presentation/);
       assert.match(options.prompt, /photorealistic cinematic editorial photography/);
       return { image: 'YWJj' };
     } }
   });
   assert.equal(res.status, 200);
+});
+
+test('reports a clear provider restriction for a rejected explicit adult request', async () => {
+  const res = await post(JSON.stringify({ prompt: 'erotic adult portrait', adultMode: true }), {
+    AI: { run: async () => { throw new Error('model safety rejection'); } }
+  });
+  const body = await res.json();
+  assert.equal(res.status, 502);
+  assert.equal(body.code, 'ADULT_CONTENT_RESTRICTED');
+  assert.match(body.error, /Workers AI модель відхилила/);
 });
 
 test('converts binary image output to base64', async () => {

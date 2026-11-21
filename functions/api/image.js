@@ -57,8 +57,9 @@ export async function onRequestPost({ request, env }) {
   try { reference = body.referenceImage === undefined ? null : decodeReference(body.referenceImage); } catch { return json({ error:'Референс-зображення завелике. Обери фото до 5 МБ — NOVA стисне його автоматично.', code:'REFERENCE_TOO_LARGE' },413); }
   if (body.referenceImage !== undefined && !reference) return json({ error:'Референсом може бути лише JPEG, PNG або WebP.', code:'INVALID_REFERENCE_IMAGE' },400);
   const adultMode = body.adultMode === true;
+  const requestedAdultContent = ADULT_TERMS.test(prompt);
   if (PROHIBITED_ADULT_TERMS.test(prompt)) return json({ error:'NOVA не створює сексуалізований контент за участі неповнолітніх.', code:'MINORS_NOT_ALLOWED' },400);
-  if (ADULT_TERMS.test(prompt) && !adultMode) return json({ error:'Для повнолітнього контенту спершу ввімкни 18+ Mode.', code:'ADULT_MODE_REQUIRED' },403);
+  if (requestedAdultContent && !adultMode) return json({ error:'Для повнолітнього контенту спершу ввімкни 18+ Mode.', code:'ADULT_MODE_REQUIRED' },403);
   if (adultMode && reference) return json({ error:'Для приватної 18+ генерації не можна використовувати фото-референси реальних людей.', code:'ADULT_REFERENCE_NOT_ALLOWED' },400);
   const presentation = ['feminine','masculine','unspecified'].includes(body.presentation) ? body.presentation : 'unspecified';
   const adultModel = ['feminine', 'masculine', 'androgynous', 'unspecified'].includes(body.adultModel) ? body.adultModel : 'unspecified';
@@ -78,7 +79,7 @@ export async function onRequestPost({ request, env }) {
       result = await env.AI.run('@cf/black-forest-labs/flux-2-klein-4b', { multipart:{body:request.body,contentType:request.headers.get('content-type')} });
     } else {
       const adultInstruction = adultMode
-        ? `Depict exactly one original, fictional, consenting adult age 25 or older${adultModel === 'unspecified' ? ' with the adult presentation requested by the user' : ` with a ${adultModel} presentation`}. Use a ${adultStyle === 'photorealistic' ? 'photorealistic high-end editorial fashion photography' : adultStyle === 'cinematic' ? 'photorealistic cinematic editorial photography' : 'photorealistic dark gothic editorial photography'} aesthetic. Never depict a real person or a minor.`
+        ? `${requestedAdultContent ? 'Depict exactly one original, fictional, consenting adult age 25 or older' : 'Depict exactly one original, fictional model character age 25 or older'}${adultModel === 'unspecified' ? ' with the presentation requested by the user' : ` with a ${adultModel} presentation`}. Use a ${adultStyle === 'photorealistic' ? 'photorealistic high-end editorial fashion photography' : adultStyle === 'cinematic' ? 'photorealistic cinematic editorial photography' : 'photorealistic dark gothic editorial photography'} aesthetic. Never depict a real person or a minor.`
         : '';
       const modelPrompt = [adultInstruction, prompt, strictPrompt ? STRICT_PROMPT_SUFFIX : ''].filter(Boolean).join('\n\n');
       try {
@@ -113,8 +114,10 @@ export async function onRequestPost({ request, env }) {
         ? 'Не вдалося обробити фото-референс у Workers AI. Спробуй інше зображення або повтори пізніше.'
         : quotaOrAccess
         ? 'Генерація зображень недоступна для цього Workers AI акаунта або вичерпано його ліміт.'
+        : requestedAdultContent
+        ? 'Поточна Workers AI модель відхилила цей дорослий опис. Спробуй неявний fashion або художній портрет повнолітнього вигаданого персонажа.'
         : 'Не вдалося створити зображення. Перевір доступність Workers AI моделі.',
-      code: reference ? 'IMAGE_REFERENCE_GENERATION_FAILED' : quotaOrAccess ? 'IMAGE_QUOTA_OR_ACCESS' : 'IMAGE_GENERATION_FAILED'
+      code: reference ? 'IMAGE_REFERENCE_GENERATION_FAILED' : quotaOrAccess ? 'IMAGE_QUOTA_OR_ACCESS' : requestedAdultContent ? 'ADULT_CONTENT_RESTRICTED' : 'IMAGE_GENERATION_FAILED'
     }, 502);
   }
 }
