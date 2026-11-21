@@ -84,13 +84,13 @@ function scheduleNextVoiceTurn(sessionId){
   },500);
 }
 function voiceFriendlyText(text){
-  return String(text||'')
-    .replace(/ДІАГНОСТИКА:[\\s\\S]*$/i,'')
-    .replace(/https?:\\/\\/\\S+/g,' посилання ')
-    .replace(/\\*\\*|__|[\\u0060#*]/g,' ')
-    .replace(/\\[[^\\]]+\\]\\([^)]*\\)/g,match=>match.slice(1,match.indexOf(']')))
-    .replace(/[•►▶]/g,', ')
-    .replace(/\\s+/g,' ').trim().slice(0,2500);
+  return String(text || '')
+    .replace(/ДІАГНОСТИКА:[\s\S]*$/i, '')
+    .replace(/https?:\/\/\S+/g, ' посилання ')
+    .replace(/\*\*|__|[#*]/g, ' ')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/[•►▶]/g, ', ')
+    .replace(/\s+/g, ' ').trim().slice(0, 2500);
 }
 function speakNOVA(text){
   if(!voiceOutputSupported&&!nativeVoice()){setVoiceNotice('Голос NOVA недоступний у цьому браузері. Спробуй Chrome і перевір голосовий рушій Android.');return false;}
