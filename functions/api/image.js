@@ -9,11 +9,12 @@ const PROHIBITED_ADULT_TERMS = /(minor|child|teen(?:ager)?|underage|schoolgirl|s
 const MAX_SEED = 4_294_967_295;
 const STRICT_PROMPT_SUFFIX = 'Follow every explicit detail in the request exactly: subject, attributes, count, composition, colors, clothing and scene. Do not add people, text, logos, objects or style elements not requested. If a detail is unspecified, keep it simple and unobtrusive.';
 const NOVA_AURAS = {
-  violet: 'violet neon aura, deep black shadows, luminous purple highlights',
-  moonlit: 'moonlit nocturne, silver-violet glow, dark romantic atmosphere',
-  cyber: 'electric neon cyberpunk aura, rain-slick reflections, magenta and ultraviolet light',
-  ember: 'dark ember glow, crimson-violet contrast, cinematic smoke'
+  violet: 'violet neon aura, luminous purple highlights, balanced soft fill lighting, visible detail in shadows',
+  moonlit: 'moonlit nocturne, silver-violet glow, romantic atmosphere, softly illuminated face and readable details',
+  cyber: 'electric neon cyberpunk aura, rain-slick reflections, magenta and ultraviolet light, balanced exposure and gentle facial fill light',
+  ember: 'ember glow, crimson-violet contrast, cinematic smoke, soft fill light preserving texture in shadows'
 };
+const NOVA_LIGHTING = 'Professional cinematic exposure: clear facial features, natural skin tones, sharp eyes, detailed clothing and textures, subtle softbox fill light, controlled contrast, rich blacks without crushed shadows, no underexposure, no muddy silhouettes. Preserve the requested dark gothic mood and neon palette; do not wash out the scene.';
 const NOVA_FOCUS = {
   portrait: 'a deliberate intimate portrait composition with expressive eyes and a clean background',
   fullbody: 'a full-length character composition with a clear, elegant silhouette',
@@ -100,7 +101,7 @@ export async function onRequestPost({ request, env }) {
       const adultInstruction = adultMode
         ? `${requestedAdultContent ? 'Depict exactly one original, fictional, consenting adult age 25 or older' : 'Depict exactly one original, fictional model character age 25 or older'}${adultModel === 'unspecified' ? ' with the presentation requested by the user' : ` with a ${adultModel} presentation`}. Use a ${adultStyle === 'photorealistic' ? 'photorealistic high-end editorial fashion photography' : adultStyle === 'cinematic' ? 'photorealistic cinematic editorial photography' : 'photorealistic dark gothic editorial photography'} aesthetic. Never depict a real person or a minor.`
         : '';
-      const novaDirection = `NOVA Director: ${NOVA_AURAS[novaAura]}; ${NOVA_FOCUS[novaFocus]}.`;
+      const novaDirection = `NOVA Director: ${NOVA_AURAS[novaAura]}; ${NOVA_FOCUS[novaFocus]}. ${NOVA_LIGHTING}`;
       const modelPrompt = [adultInstruction, novaDirection, prompt, strictPrompt ? STRICT_PROMPT_SUFFIX : ''].filter(Boolean).join('\n\n');
       // FLUX.1 Schnell's published input schema accepts prompt and steps only.
       // Keep the UI seed as metadata, but do not send unsupported seed to the model.
