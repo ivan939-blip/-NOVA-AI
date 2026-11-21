@@ -44,7 +44,25 @@ function adultView() { return `<section class="screen adult"><div class="adult-m
 function content(){ return ({home,chat,image:imageStudio,video:videoStudio,characters,library:libraryView,adult:adultView})[active](); }
 function authModal(){return `<div class="modal-backdrop"><section class="auth-modal"><button class="modal-close" id="close-auth">×</button><span class="eyebrow">NOVA IDENTITY</span><h2>${session ? 'Твій профіль' : 'Увійти до NOVA'}</h2>${session?`<p>${esc(session.user.email)}</p><button class="secondary" id="sign-out">Вийти</button>`:isCloudReady?`<p>Увійди або створи акаунт, щоб синхронізувати бібліотеку.</p><form id="auth-form"><input type="email" id="auth-email" placeholder="Email" required/><input type="password" id="auth-password" placeholder="Пароль (мін. 6 символів)" minlength="6" required/><button class="primary">Продовжити</button></form><p class="notice">${authNotice || 'Новий email автоматично отримає посилання для підтвердження.'}</p>`:`<p>Хмарний обліковий запис ще не налаштований для цього deployment.</p><p class="notice">Хмарний вхід запрацює після підключення безкоштовного проєкту Supabase.</p>`}</section></div>`;}
 function render(){ const hadAuth=Boolean($('.modal-backdrop')); $('#app').innerHTML=`<main class="app-shell">${content()}<nav>${navItem('home','Home')}${navItem('image','Studio')}${navItem('chat','Chat')}${navItem('library','Library')}${navItem('adult','18+')}</nav></main>`; bind(); if(hadAuth&&!session){$('#app').insertAdjacentHTML('beforeend',authModal());bindAuth();} }
-async function generateImage(){const prompt=$('#image-prompt')?.value.trim();if(!prompt||imageBusy)return;imagePrompt=prompt;imageBusy=true;imageError='';imageResult='';render();try{const res=await fetch(`${import.meta.env.BASE_URL}api/image`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt})});const data=await res.json();if(!res.ok||!data.image)throw new Error(data.error||data.code||'Сервер не повернув зображення.');imageResult=data.image;}catch(e){imageError=e.message||'Помилка генерації.';}finally{imageBusy=false;render();}}
+async function generateImage(){
+  const prompt=$('#image-prompt')?.value.trim();
+  if(!prompt||imageBusy)return;
+  imagePrompt=prompt;imageBusy=true;imageError='';imageResult='';render();
+  const controller=new AbortController();
+  const timeout=setTimeout(()=>controller.abort(),120000);
+  try{
+    const res=await fetch(`${import.meta.env.BASE_URL}api/image`,{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({prompt}),signal:controller.signal
+    });
+    const data=await res.json().catch(()=>({}));
+    if(!res.ok)throw new Error(data.error||data.code||'Сервер не повернув зображення.');
+    if(typeof data.image!=='string'||!data.image.startsWith('data:image/'))throw new Error('Сервер повернув некоректне зображення.');
+    imageResult=data.image;
+  }catch(e){
+    imageError=e.name==='AbortError'?'Генерація перевищила 2 хвилини. Спробуй коротший опис або повтори пізніше.':e.message||'Не вдалося згенерувати зображення.';
+  }finally{clearTimeout(timeout);imageBusy=false;render();}
+}
 async function askNOVA(text) {
   chatBusy=true;
   render();
