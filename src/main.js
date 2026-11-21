@@ -288,7 +288,10 @@ async function askNOVA(text) {
       const raw=await result.text();
       let data;
       try { data=JSON.parse(raw); } catch { data={error:raw}; }
-      throw new Error(`${data.code || `HTTP_${result.status}`}: ${data.error || 'Сервер не повернув відповідь.'}`);
+      const diagnostics=Array.isArray(data.failures)
+        ? data.failures.slice(0,3).map(item=>`${String(item.model||'model').replace(/^@cf\\//,'')}: ${String(item.reason||'UNKNOWN')}`).join('; ')
+        : '';
+      throw new Error(`${data.code || `HTTP_${result.status}`}: ${data.error || 'Сервер не повернув відповідь.'}${diagnostics ? ' | Моделі: '+diagnostics : ''}`);
     }
 
     const contentType=result.headers.get('content-type') || '';
