@@ -83,12 +83,21 @@ function scheduleNextVoiceTurn(sessionId){
     if(voiceConversationMode&&sessionId===voiceSessionId&&!chatBusy&&!voiceListening&&active==='voice')startVoiceInput();
   },500);
 }
+function voiceFriendlyText(text){
+  return String(text||'')
+    .replace(/ДІАГНОСТИКА:[\\s\\S]*$/i,'')
+    .replace(/https?:\\/\\/\\S+/g,' посилання ')
+    .replace(/\\*\\*|__|[\\u0060#*]/g,' ')
+    .replace(/\\[[^\\]]+\\]\\([^)]*\\)/g,match=>match.slice(1,match.indexOf(']')))
+    .replace(/[•►▶]/g,', ')
+    .replace(/\\s+/g,' ').trim().slice(0,2500);
+}
 function speakNOVA(text){
   if(!voiceOutputSupported&&!nativeVoice()){setVoiceNotice('Голос NOVA недоступний у цьому браузері. Спробуй Chrome і перевір голосовий рушій Android.');return false;}
   if(!text)return false;
   const sessionId=voiceSessionId;
   if(nativeVoice()){
-    try{setVoicePhase('speaking');setVoiceNotice('NOVA говорить…');window.NovaVoice.speak(String(text).replace(/[`*_#]/g,' ').slice(0,3500));return true;}
+    try{setVoicePhase('speaking');setVoiceNotice('NOVA говорить…');window.NovaVoice.speak(voiceFriendlyText(text));return true;}
     catch(error){setVoiceNotice('Помилка Android TTS: '+(error?.message||'невідомо'));return false;}
   }
   try {
@@ -262,10 +271,10 @@ async function askNOVA(text) {
   chatBusy=true;
   render();
   const controller=new AbortController();
-  const timeout=setTimeout(()=>controller.abort(),90000);
+  const timeout=setTimeout(()=>controller.abort(),voiceConversationMode?45000:90000);
   let reply=null;
   try {
-    const history=messages
+    const history=(voiceConversationMode?messages.slice(-8):messages)
       .filter((m,i)=>!(i===0&&m.role==='nova')&&!(i===messages.length-1&&m.role==='user'&&m.text===text))
       .map(m=>({role:m.role==='nova'?'assistant':'user',content:m.text}));
     const result=await fetch(`${import.meta.env.BASE_URL}api/chat`,{
@@ -314,26 +323,30 @@ async function askNOVA(text) {
       };
 
       let lastChunkAt=Date.now();
-      let streamFinished=false;
+      let pendingRead=reader.read();
+      let streamDone=false;
       while(true) {
+        let idleTimer;
         const next=await Promise.race([
-          reader.read(),
-          new Promise(resolve=>setTimeout(()=>resolve({idle:true}),12000))
+          pendingRead,
+          new Promise(resolve=>{idleTimer=setTimeout(()=>resolve({idle:true}),2500);})
         ]);
+        clearTimeout(idleTimer);
         if(next.idle){
-          if(reply.text.trim()&&Date.now()-lastChunkAt>=12000){streamFinished=true;break;}
+          if(reply.text.trim()&&Date.now()-lastChunkAt>=2500)break;
           continue;
         }
-        if(next.done){streamFinished=true;break;}
+        if(next.done){streamDone=true;break;}
         lastChunkAt=Date.now();
         buffer+=decoder.decode(next.value,{stream:true});
         const events=buffer.split(/\r?\n\r?\n/);
         buffer=events.pop() || '';
         events.forEach(parseEvent);
+        pendingRead=reader.read();
       }
-      if(streamFinished){buffer+=decoder.decode();if(buffer.trim())parseEvent(buffer);}
+      if(streamDone){buffer+=decoder.decode();if(buffer.trim())parseEvent(buffer);}
       if(!reply.text.trim()) reply.text='Модель не надіслала текстової відповіді. Спробуй ще раз.';
-      if(streamFinished){try{await reader.cancel();}catch{}}
+      if(!streamDone){reader.cancel().catch(()=>{});}
     } else {
       const data=await result.json();
       if(!data.answer) throw new Error(data.error || 'Сервер не повернув текст відповіді.');
