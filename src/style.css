@@ -61,3 +61,22 @@
 .voice-bar .voice-conversation-toggle{width:auto;height:auto;min-height:36px;flex:1 1 100%;padding:9px 12px;border:1px solid #a65bdb;border-radius:11px;background:linear-gradient(100deg,#53247e,#923a91);color:#fff;font-size:13px;font-weight:600}
 .voice-bar .voice-conversation-toggle[aria-pressed="true"]{background:linear-gradient(100deg,#8a285e,#63239b);border-color:#ee8cda}
 .voice-bar .voice-conversation-toggle:disabled{opacity:.5}
+
+/* Dedicated voice conversation screen, preserving the original home layout. */
+.open-voice-room{display:block;margin:10px 14px 6px;width:calc(100% - 28px);padding:12px;border-radius:14px;border:1px solid #a45be0;background:#301744;color:#f6eaff;font-weight:700}
+.nova-voice-room{padding:16px 16px 110px;overflow-y:auto}
+.voice-back{background:transparent;border:0;color:#dcb8ff;padding:8px 0 15px;font-size:14px}
+.voice-room-hero{position:relative;height:min(48vh,420px);min-height:250px;overflow:hidden;border-radius:22px;border:1px solid #663b85;background:#13091d}
+.voice-room-hero img{height:100%;width:100%;object-fit:cover;object-position:center top}
+.voice-room-shade{position:absolute;inset:0;background:linear-gradient(0deg,#110817 0%,transparent 75%)}
+.voice-room-title{position:absolute;bottom:18px;left:20px;right:20px;color:white}
+.voice-room-title span{font-size:11px;letter-spacing:2px;color:#d5a5ff}
+.voice-room-title h2{margin:8px 0;font-size:25px}
+.voice-room-title p{margin:0;color:#eee0f8}
+.voice-room-actions{display:flex;gap:10px;margin:18px 0}
+.voice-room-actions button{flex:1;min-height:52px;border-radius:16px;border:1px solid #a967e8;background:linear-gradient(110deg,#52207a,#a23e9e);color:white;font-weight:700}
+.voice-room-actions button+button{background:#281332;border-color:#68417b}
+.voice-room-actions button:disabled{opacity:.45}
+.voice-room-transcript{max-height:25vh;overflow:auto;padding:12px;border-radius:14px;background:#1b1025;color:#f3eaf9}
+.voice-room-transcript p{margin:7px 0;line-height:1.5;overflow-wrap:anywhere}
+.voice-room-help{color:#e3badc}
