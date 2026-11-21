@@ -90,7 +90,9 @@ test('converts stream image output to base64', async () => {
 test('returns a safe 502 if model fails or output is unsupported', async () => {
   const res = await post(JSON.stringify({ prompt: 'moonlit castle' }), { AI: { run: async () => { throw new Error('secret diagnostic'); } } });
   assert.equal(res.status, 502);
-  assert.equal((await res.json()).code, 'IMAGE_GENERATION_FAILED');
+  const failed = await res.json();
+  assert.equal(failed.code, 'IMAGE_GENERATION_FAILED');
+  assert.doesNotMatch(JSON.stringify(failed), /secret diagnostic/);
   const unsupported = await post(JSON.stringify({ prompt: 'moonlit castle' }), { AI: { run: async () => ({ other: true }) } });
   assert.equal(unsupported.status, 502);
 });

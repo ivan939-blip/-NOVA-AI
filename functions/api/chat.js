@@ -65,13 +65,13 @@ export async function onRequestPost({ request, env }) {
       lastError = new Error('AI_EMPTY_RESPONSE');
     } catch (error) {
       lastError = error;
-      console.error('NOVA AI model failed:', model, error);
+      // Provider error text may include internal details, so keep logs generic.
+      console.error('NOVA AI model failed:', model);
     }
   }
   return json({
     error: 'Не вдалося отримати відповідь від основної або резервної AI-моделі. Можливо, сервіс тимчасово недоступний або вичерпано ліміт.',
-    code: 'AI_RUN_FAILED',
-    diagnostic: { errorName: lastError?.name || 'UnknownError', errorMessage: String(lastError?.message || '').slice(0, 240) }
+    code: 'AI_RUN_FAILED'
   }, 502);
 }
 

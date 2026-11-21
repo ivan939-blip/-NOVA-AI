@@ -66,7 +66,9 @@ export async function onRequestPost({ request, env }) {
       preserveFaceApplied: Boolean(reference && preserveFace)
     });
   } catch (error) {
-    console.error('NOVA image generation failed:', error);
+    // Do not write provider exception text to logs or return it to the client:
+    // it can contain request metadata or internal provider details.
+    console.error('NOVA image generation failed');
     const detail = String(error?.message || 'Unknown Workers AI error');
     const quotaOrAccess = /quota|limit|neuron|billing|account|not enabled|not available/i.test(detail);
     return json({
@@ -75,8 +77,7 @@ export async function onRequestPost({ request, env }) {
         : quotaOrAccess
         ? 'Генерація зображень недоступна для цього Workers AI акаунта або вичерпано його ліміт.'
         : 'Не вдалося створити зображення. Перевір доступність Workers AI моделі.',
-      code: reference ? 'IMAGE_REFERENCE_GENERATION_FAILED' : quotaOrAccess ? 'IMAGE_QUOTA_OR_ACCESS' : 'IMAGE_GENERATION_FAILED',
-      diagnostic: { name: error?.name || 'Error', message: detail.slice(0, 240) }
+      code: reference ? 'IMAGE_REFERENCE_GENERATION_FAILED' : quotaOrAccess ? 'IMAGE_QUOTA_OR_ACCESS' : 'IMAGE_GENERATION_FAILED'
     }, 502);
   }
 }
