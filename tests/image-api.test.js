@@ -33,7 +33,7 @@ test('rejects empty prompts', async () => {
 
 test('rejects oversized requests before invoking AI', async () => {
   let invoked = false;
-  const res = await post(JSON.stringify({ prompt: 'x'.repeat(21000) }), { AI: { run: async () => { invoked = true; } } });
+  const res = await post(JSON.stringify({ prompt: 'x'.repeat(1_500_001) }), { AI: { run: async () => { invoked = true; } } });
   assert.equal(res.status, 413);
   assert.equal((await res.json()).code, 'REQUEST_TOO_LARGE');
   assert.equal(invoked, false);
@@ -57,6 +57,18 @@ test('returns base64 image data from FLUX', async () => {
   });
   assert.equal(res.status, 200);
   assert.equal((await res.json()).image, 'data:image/jpeg;base64,YWJj');
+});
+
+test('uses FLUX reference model for a valid uploaded image', async () => {
+  const res = await post(JSON.stringify({ prompt: 'turn image 0 into a violet portrait', referenceImage: 'data:image/jpeg;base64,YWJj' }), {
+    AI: { run: async (model, options) => { assert.equal(model, '@cf/black-forest-labs/flux-2-klein-4b'); assert.ok(options.multipart.body); assert.match(options.multipart.contentType, /multipart\/form-data/); return { image: 'YWJj' }; } }
+  });
+  const body = await res.json(); assert.equal(res.status, 200); assert.equal(body.referenceUsed, true); assert.equal(body.image, 'data:image/jpeg;base64,YWJj');
+});
+
+test('rejects unsafe reference formats before invoking AI', async () => {
+  let invoked=false; const res=await post(JSON.stringify({prompt:'moon',referenceImage:'data:image/gif;base64,YWJj'}),{AI:{run:async()=>{invoked=true;}}});
+  assert.equal(res.status,400); assert.equal((await res.json()).code,'INVALID_REFERENCE_IMAGE'); assert.equal(invoked,false);
 });
 
 test('converts binary image output to base64', async () => {

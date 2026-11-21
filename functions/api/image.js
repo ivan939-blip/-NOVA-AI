@@ -1,6 +1,30 @@
 const json = (body, status = 200) => Response.json(body, { status, headers: { 'Cache-Control': 'no-store' } });
-const MAX_BODY_CHARS = 20_000;
+const MAX_BODY_CHARS = 1_500_000;
 const MAX_PROMPT_CHARS = 1_800;
+const MAX_REFERENCE_BYTES = 1_000_000;
+
+function imageDataUrl(result) {
+  const encodedImage = typeof result?.image === 'string' ? result.image : typeof result === 'string' ? result : null;
+  if (encodedImage) return encodedImage.startsWith('data:image/') ? encodedImage : 'data:image/jpeg;base64,' + encodedImage;
+  return null;
+}
+async function outputDataUrl(result) {
+  const direct = imageDataUrl(result); if (direct) return direct;
+  const payload = result?.image ?? result;
+  const bytes = payload instanceof ReadableStream ? await new Response(payload).arrayBuffer() : payload;
+  if (!(bytes instanceof ArrayBuffer) && !ArrayBuffer.isView(bytes)) throw new Error('Unsupported image output');
+  const data = bytes instanceof ArrayBuffer ? new Uint8Array(bytes) : new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  if (!data.length) throw new Error('Empty image output');
+  let binary = ''; for (let i = 0; i < data.length; i += 0x8000) binary += String.fromCharCode(...data.subarray(i, i + 0x8000));
+  return 'data:image/png;base64,' + btoa(binary);
+}
+function decodeReference(value) {
+  const match = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(value || '');
+  if (!match) return null;
+  const binary = atob(match[2]); if (binary.length > MAX_REFERENCE_BYTES) throw new Error('REFERENCE_TOO_LARGE');
+  const bytes = new Uint8Array(binary.length); for (let i=0;i<binary.length;i++) bytes[i]=binary.charCodeAt(i);
+  return { type: match[1], bytes };
+}
 
 export async function onRequestPost({ request, env }) {
   let rawBody;
@@ -18,47 +42,29 @@ export async function onRequestPost({ request, env }) {
   const prompt = typeof body.prompt === 'string' ? body.prompt.trim() : '';
   if (!prompt) return json({ error: 'Напиши опис зображення.', code: 'PROMPT_REQUIRED' }, 400);
   if (prompt.length > MAX_PROMPT_CHARS) return json({ error: 'Опис має бути не довшим за 1800 символів.', code: 'PROMPT_TOO_LONG' }, 400);
+  let reference;
+  try { reference = body.referenceImage === undefined ? null : decodeReference(body.referenceImage); } catch { return json({ error:'Референс-зображення завелике. Обери фото до 5 МБ — NOVA стисне його автоматично.', code:'REFERENCE_TOO_LARGE' },413); }
+  if (body.referenceImage !== undefined && !reference) return json({ error:'Референсом може бути лише JPEG, PNG або WebP.', code:'INVALID_REFERENCE_IMAGE' },400);
   if (!env.AI) return json({ error: 'AI-ядро не підключене.', code: 'AI_BINDING_MISSING' }, 503);
   try {
-    const result = await env.AI.run('@cf/black-forest-labs/flux-1-schnell', { prompt, steps: 4 });
-    const encodedImage = typeof result?.image === 'string'
-      ? result.image
-      : typeof result === 'string'
-        ? result
-        : null;
-    if (encodedImage) {
-      const image = encodedImage.startsWith('data:image/')
-        ? encodedImage
-        // FLUX returns a base64-encoded JPEG string (not a PNG payload).
-        : 'data:image/jpeg;base64,' + encodedImage;
-      return json({ image });
-    }
-    const payload = result?.image ?? result;
-    const bytes = payload instanceof ReadableStream
-      ? await new Response(payload).arrayBuffer()
-      : payload;
-    if (!(bytes instanceof ArrayBuffer) && !ArrayBuffer.isView(bytes)) {
-      throw new Error('Unsupported image output');
-    }
-    const data = bytes instanceof ArrayBuffer
-      ? new Uint8Array(bytes)
-      : new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-    if (!data.length) throw new Error('Empty image output');
-    let binary = '';
-    const chunkSize = 0x8000;
-    for (let i = 0; i < data.length; i += chunkSize) {
-      binary += String.fromCharCode(...data.subarray(i, i + chunkSize));
-    }
-    return json({ image: 'data:image/png;base64,' + btoa(binary) });
+    let result;
+    if (reference) {
+      const form = new FormData(); form.append('prompt', prompt); form.append('input_image_0', new Blob([reference.bytes], {type:reference.type}), 'reference-image');
+      const request = new Request('https://nova.local/image-reference', {method:'POST',body:form});
+      result = await env.AI.run('@cf/black-forest-labs/flux-2-klein-4b', { multipart:{body:request.body,contentType:request.headers.get('content-type')} });
+    } else result = await env.AI.run('@cf/black-forest-labs/flux-1-schnell', { prompt, steps: 4 });
+    return json({ image: await outputDataUrl(result), referenceUsed:Boolean(reference) });
   } catch (error) {
     console.error('NOVA image generation failed:', error);
     const detail = String(error?.message || 'Unknown Workers AI error');
     const quotaOrAccess = /quota|limit|neuron|billing|account|not enabled|not available/i.test(detail);
     return json({
-      error: quotaOrAccess
+      error: reference
+        ? 'Не вдалося обробити фото-референс у Workers AI. Спробуй інше зображення або повтори пізніше.'
+        : quotaOrAccess
         ? 'Генерація зображень недоступна для цього Workers AI акаунта або вичерпано його ліміт.'
         : 'Не вдалося створити зображення. Перевір доступність Workers AI моделі.',
-      code: quotaOrAccess ? 'IMAGE_QUOTA_OR_ACCESS' : 'IMAGE_GENERATION_FAILED',
+      code: reference ? 'IMAGE_REFERENCE_GENERATION_FAILED' : quotaOrAccess ? 'IMAGE_QUOTA_OR_ACCESS' : 'IMAGE_GENERATION_FAILED',
       diagnostic: { name: error?.name || 'Error', message: detail.slice(0, 240) }
     }, 502);
   }
