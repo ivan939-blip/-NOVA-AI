@@ -3,5 +3,7 @@ dist/
 .vite/
 .npm-cache/
 local-video-output/
+release/
+release-verify/
 .env
 .env.local

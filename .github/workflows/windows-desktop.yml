@@ -1,0 +1,31 @@
+name: Build NOVA AI Windows app
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-portable:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install and verify
+        run: |
+          npm ci
+          npm test
+          npm run build
+      - name: Build portable Windows app
+        run: npm run desktop:pack
+      - name: Upload Windows app
+        uses: actions/upload-artifact@v4
+        with:
+          name: NOVA-AI-Windows-portable
+          path: release/*.exe
+          if-no-files-found: error

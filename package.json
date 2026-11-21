@@ -1,9 +1,35 @@
 {
   "name": "nova-ai",
   "version": "0.1.0",
+  "description": "NOVA AI — gothic cyberpunk creative assistant",
+  "author": "NOVA AI",
   "private": true,
   "type": "module",
-  "scripts": { "dev": "vite", "build": "vite build", "test": "node --test", "preview": "vite preview", "video:local": "node local-video-server.mjs" },
-  "dependencies": { "@supabase/supabase-js": "^2.98.0", "ffmpeg-static": "^5.3.0" },
-  "devDependencies": { "vite": "^7.2.6" }
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "test": "node --test",
+    "preview": "vite preview",
+    "video:local": "node local-video-server.mjs",
+    "desktop:dev": "electron .",
+    "desktop:pack": "electron-builder --win portable --x64 --publish never"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.98.0",
+    "ffmpeg-static": "^5.3.0"
+  },
+  "devDependencies": {
+    "electron": "^45.4.1",
+    "electron-builder": "^26.18.0",
+    "vite": "^7.2.6"
+  },
+  "build": {
+    "appId": "ai.nova.studio",
+    "productName": "NOVA AI",
+    "directories": { "output": "release" },
+    "files": ["electron/**/*", "package.json"],
+    "extraResources": [{ "from": "public/nova-heroine.png", "to": "nova-heroine.png" }],
+    "win": { "target": ["portable"] }
+  }
 }
