@@ -108,7 +108,8 @@ export async function onRequestPost({ request, env }) {
         const reason = String(seedError?.message || '');
         // Some Workers AI accounts expose FLUX but reject the optional seed field.
         // Keep image creation available and report that reproducibility was unavailable.
-        if (!/seed|schema|validation|invalid input|unsupported/i.test(reason)) throw seedError;
+        if (/quota|neuron|billing|rate.limit|capacity|not allowed|account not|model not found|no such model/i.test(reason)) throw seedError;
+        // Provider validation errors are sometimes generic; retry once with the minimal supported payload.
         result = await env.AI.run('@cf/black-forest-labs/flux-1-schnell', { prompt: modelPrompt, steps: 4 });
         seedApplied = false;
       }
@@ -128,7 +129,10 @@ export async function onRequestPost({ request, env }) {
     // it can contain request metadata or internal provider details.
     console.error('NOVA image generation failed');
     const detail = String(error?.message || 'Unknown Workers AI error');
-    const quotaOrAccess = /quota|limit|neuron|billing|account|not enabled|not available/i.test(detail);
+    const quotaOrAccess = /quota|limit|neuron|billing|account|not enabled|not available|rate.limit/i.test(detail);
+    const modelUnavailable = /no such model|model not found|unknown model|model does not exist|not supported|model_error/i.test(detail);
+    const invalidPayload = /invalid|schema|validation|parameter|input|seed/i.test(detail);
+    const failureCode = quotaOrAccess ? 'IMAGE_QUOTA_OR_ACCESS' : modelUnavailable ? 'IMAGE_MODEL_UNAVAILABLE' : invalidPayload ? 'IMAGE_MODEL_INPUT_REJECTED' : 'IMAGE_GENERATION_FAILED';
     return json({
       error: reference
         ? 'Не вдалося обробити фото-референс у Workers AI. Спробуй інше зображення або повтори пізніше.'
@@ -136,8 +140,12 @@ export async function onRequestPost({ request, env }) {
         ? 'Генерація зображень недоступна для цього Workers AI акаунта або вичерпано його ліміт.'
         : requestedAdultContent
         ? 'Поточна Workers AI модель відхилила цей дорослий опис. Спробуй неявний fashion або художній портрет повнолітнього вигаданого персонажа.'
-        : 'Не вдалося створити зображення. Перевір доступність Workers AI моделі.',
-      code: reference ? 'IMAGE_REFERENCE_GENERATION_FAILED' : quotaOrAccess ? 'IMAGE_QUOTA_OR_ACCESS' : requestedAdultContent ? 'ADULT_CONTENT_RESTRICTED' : 'IMAGE_GENERATION_FAILED'
+        : modelUnavailable
+        ? 'Модель генерації зараз недоступна у Workers AI. Перевір її доступність у Cloudflare.'
+        : invalidPayload
+        ? 'Workers AI відхилив параметри генерації. Спробуй ще раз без фото.'
+        : 'Workers AI не створив зображення. Спробуй пізніше або перевір журнал помилок Cloudflare.',
+      code: reference ? 'IMAGE_REFERENCE_GENERATION_FAILED' : requestedAdultContent && !quotaOrAccess && !modelUnavailable ? 'ADULT_CONTENT_RESTRICTED' : failureCode
     }, 502);
   }
 }
