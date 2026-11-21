@@ -63,10 +63,10 @@ export async function onRequestPost({ request, env }) {
         messages: modelMessages,
         max_completion_tokens: voiceMode ? 160 : 700,
         temperature: 0.7,
-        stream: true,
+        stream: !voiceMode,
         chat_template_kwargs: { enable_thinking: false }
       });
-      if (typeof result?.getReader === 'function') {
+      if (!voiceMode && typeof result?.getReader === 'function') {
         return new Response(result, {
           headers: { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-cache, no-transform', 'X-Accel-Buffering': 'no' }
         });
