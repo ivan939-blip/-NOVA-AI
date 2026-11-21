@@ -80,3 +80,8 @@
 .voice-room-transcript{max-height:25vh;overflow:auto;padding:12px;border-radius:14px;background:#1b1025;color:#f3eaf9}
 .voice-room-transcript p{margin:7px 0;line-height:1.5;overflow-wrap:anywhere}
 .voice-room-help{color:#e3badc}
+
+/* Dedicated chat voice-mode entry, always accessible beside message field. */
+.composer .chat-voice-mode{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:0 0 56px;min-width:56px;gap:2px;padding:7px 4px;border-radius:14px;background:#48215e;border:1px solid #ab65e0;color:#fff;font-size:19px;line-height:1.1}
+.composer .chat-voice-mode span{font-size:10px;font-weight:700;white-space:nowrap}
+.composer textarea{min-width:0;flex:1}
