@@ -280,7 +280,7 @@ async function askNOVA(text) {
     const result=await fetch(`${import.meta.env.BASE_URL}api/chat`,{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({messages:[...history,{role:'user',content:text}],persona:activeCharacter,adultTone:Boolean(adult&&adultTone),styleMemory:adult&&adultTone&&adultLearning?adultVocabulary:undefined}),
+      body:JSON.stringify({messages:[...history,{role:'user',content:text}],voiceMode:voiceConversationMode,persona:activeCharacter,adultTone:Boolean(adult&&adultTone),styleMemory:adult&&adultTone&&adultLearning?adultVocabulary:undefined}),
       signal:controller.signal
     });
 
