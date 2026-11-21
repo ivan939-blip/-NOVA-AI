@@ -13,6 +13,8 @@ const jobs = new Map();
 const RENDER_TIMEOUT_MS = 120_000;
 const RESULT_TTL_MS = 24 * 60 * 60 * 1_000;
 const MAX_CONCURRENT_RENDERS = 2;
+const comfyUrl = (process.env.NOVA_COMFYUI_URL || 'http://127.0.0.1:8188').replace(/\/$/, '');
+const comfyWorkflowPath = process.env.NOVA_COMFY_WORKFLOW || '';
 
 function send(res, status, body, origin) {
   const headers = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' };
@@ -53,7 +55,7 @@ function unpackImage(value, id) {
   if (data.length < 1_024) return null;
   return { name: `source-${id}.${match[1] === 'jpeg' ? 'jpg' : match[1]}`, data };
 }
-async function render(job, image) {
+async function renderMotion(job, image) {
   await mkdir(outputDir, { recursive: true });
   const target = resolve(outputDir, `nova-${job.id}.mp4`);
   const title = 'NOVA AI // LOCAL MOTION';
@@ -83,20 +85,84 @@ async function render(job, image) {
   }
 }
 
+function replaceTemplate(value, variables) {
+  if (typeof value === 'string') return value.replace(/{{([A-Z_]+)}}/g, (_, name) => String(variables[name] ?? ''));
+  if (Array.isArray(value)) return value.map(item => replaceTemplate(item, variables));
+  if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, replaceTemplate(item, variables)]));
+  return value;
+}
+async function uploadComfyImage(image) {
+  if (!image) return '';
+  const form = new FormData();
+  form.set('image', new Blob([image.data], { type: `image/${image.name.split('.').pop()}` }), image.name);
+  const response = await fetch(`${comfyUrl}/upload/image`, { method: 'POST', body: form, signal: AbortSignal.timeout(30_000) });
+  if (!response.ok) throw new Error(`ComfyUI image upload failed (${response.status})`);
+  const uploaded = await response.json();
+  return uploaded.name || image.name;
+}
+function videoOutput(outputs) {
+  for (const output of Object.values(outputs || {})) {
+    for (const key of ['gifs', 'videos']) {
+      const item = output?.[key]?.[0];
+      if (item?.filename) return item;
+    }
+  }
+  return null;
+}
+async function renderNeural(job, image) {
+  if (!comfyWorkflowPath) throw new Error('NEURAL_BACKEND_NOT_CONFIGURED');
+  let template;
+  try { template = JSON.parse(await readFile(resolve(comfyWorkflowPath), 'utf8')); } catch { throw new Error('COMFY_WORKFLOW_INVALID'); }
+  const sourceName = await uploadComfyImage(image);
+  const [width, height] = (job.aspectRatio === '16:9' ? '854x480' : job.aspectRatio === '1:1' ? '640x640' : '480x854').split('x');
+  const workflow = replaceTemplate(template, {
+    PROMPT: job.prompt, NEGATIVE_PROMPT: 'blurry, low quality, distorted, watermark, text', WIDTH: width, HEIGHT: height,
+    FRAMES: job.seconds * 16, SEED: Math.floor(Math.random() * 2_147_483_647), IMAGE_FILENAME: sourceName
+  });
+  const queued = await fetch(`${comfyUrl}/prompt`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt: workflow, client_id: `nova-${job.id}` }), signal: AbortSignal.timeout(30_000) });
+  if (!queued.ok) throw new Error(`COMFY_QUEUE_FAILED_${queued.status}`);
+  const { prompt_id: promptId } = await queued.json();
+  if (!promptId) throw new Error('COMFY_NO_PROMPT_ID');
+  const deadline = Date.now() + 15 * 60_000;
+  while (Date.now() < deadline) {
+    await new Promise(done => setTimeout(done, 2_000));
+    const history = await fetch(`${comfyUrl}/history/${encodeURIComponent(promptId)}`, { signal: AbortSignal.timeout(20_000) });
+    if (!history.ok) continue;
+    const item = (await history.json())[promptId];
+    if (!item) continue;
+    if (item.status?.status_str === 'error') throw new Error('COMFY_RENDER_FAILED');
+    const output = videoOutput(item.outputs);
+    if (!output) continue;
+    const query = new URLSearchParams({ filename: output.filename, subfolder: output.subfolder || '', type: output.type || 'output' });
+    const media = await fetch(`${comfyUrl}/view?${query}`, { signal: AbortSignal.timeout(120_000) });
+    if (!media.ok) throw new Error(`COMFY_DOWNLOAD_FAILED_${media.status}`);
+    const extension = /\.webm$/i.test(output.filename) ? '.webm' : '.mp4';
+    const target = resolve(outputDir, `nova-${job.id}${extension}`);
+    await mkdir(outputDir, { recursive: true }); await writeFile(target, Buffer.from(await media.arrayBuffer()));
+    job.file = `nova-${job.id}${extension}`; job.status = 'completed';
+    setTimeout(() => { jobs.delete(job.id); rm(target, { force: true }).catch(() => {}); }, RESULT_TTL_MS);
+    return;
+  }
+  throw new Error('COMFY_RENDER_TIMEOUT');
+}
+
 createServer(async (req, res) => {
   const origin = req.headers.origin;
   if (allowed(req, res)) return;
   const url = new URL(req.url, `http://${host}:${port}`);
   try {
-    if (url.pathname === '/health') return send(res, 200, { app: 'NOVA Local Motion Forge', api: 'online', engine: 'FFmpeg' }, origin);
+    if (url.pathname === '/health') return send(res, 200, { app: 'NOVA Local Video', api: 'online', engine: 'FFmpeg', neural: Boolean(comfyWorkflowPath), neuralEngine: comfyWorkflowPath ? 'ComfyUI workflow' : 'not configured' }, origin);
     if (url.pathname === '/api/video' && req.method === 'POST') {
       const input = await parseBody(req); const prompt = typeof input?.prompt === 'string' ? input.prompt.trim() : '';
       if (!prompt) return send(res, 400, { error: 'Опиши відео.', code: 'PROMPT_REQUIRED' }, origin);
       if (prompt.length > 1800) return send(res, 400, { error: 'Опис має бути не довшим за 1800 символів.', code: 'PROMPT_TOO_LONG' }, origin);
       if ([...jobs.values()].filter(job => job.status === 'processing').length >= MAX_CONCURRENT_RENDERS) return send(res, 429, { error: 'Локальний рендер зайнятий двома завданнями. Зачекай завершення одного з них.', code: 'RENDER_QUEUE_FULL' }, origin);
-      const id = randomUUID(); const job = { id, status: 'processing', seconds: Math.max(4, Math.min(12, Number(input.seconds) || 5)), aspectRatio: ['16:9', '1:1', '9:16'].includes(input.aspect_ratio) ? input.aspect_ratio : '9:16', motion: ['push-in','pan-left','pan-right','drift'].includes(input.motion) ? input.motion : 'push-in' }; jobs.set(id, job);
-      render(job, unpackImage(input.image, id)).catch(error => { console.error(error); job.status = 'failed'; job.error = 'Не вдалося зібрати MP4 локально.'; setTimeout(() => jobs.delete(id), RESULT_TTL_MS); });
-      return send(res, 202, { video_id: id, provider: 'local-motion-forge' }, origin);
+      const engine = input.engine === 'motion' ? 'motion' : 'neural';
+      if (engine === 'neural' && !comfyWorkflowPath) return send(res, 503, { error: 'Нейромережевий режим потребує локального ComfyUI та NOVA_COMFY_WORKFLOW. Обери Motion Forge або налаштуй безкоштовний локальний бекенд.', code: 'NEURAL_BACKEND_NOT_CONFIGURED' }, origin);
+      const id = randomUUID(); const job = { id, status: 'processing', engine, prompt, seconds: Math.max(4, Math.min(12, Number(input.seconds) || 5)), aspectRatio: ['16:9', '1:1', '9:16'].includes(input.aspect_ratio) ? input.aspect_ratio : '9:16', motion: ['push-in','pan-left','pan-right','drift'].includes(input.motion) ? input.motion : 'push-in' }; jobs.set(id, job);
+      const image = unpackImage(input.image, id);
+      (engine === 'neural' ? renderNeural(job, image) : renderMotion(job, image)).catch(error => { console.error(error); job.status = 'failed'; job.error = error.message === 'NEURAL_BACKEND_NOT_CONFIGURED' ? 'Нейромережевий бекенд не налаштований.' : engine === 'neural' ? 'ComfyUI не створив відео. Перевір запущений сервер і workflow.' : 'Не вдалося зібрати MP4 локально.'; setTimeout(() => jobs.delete(id), RESULT_TTL_MS); });
+      return send(res, 202, { video_id: id, provider: engine === 'neural' ? 'local-comfyui-neural' : 'local-motion-forge' }, origin);
     }
     if (url.pathname === '/api/video' && req.method === 'GET') {
       const job = jobs.get(url.searchParams.get('video_id'));
@@ -106,10 +172,10 @@ createServer(async (req, res) => {
     }
     if (url.pathname.startsWith('/media/') && ['GET', 'HEAD'].includes(req.method)) {
       const name = url.pathname.slice(7);
-      if (!/^nova-[a-f0-9-]+\.mp4$/i.test(name)) return send(res, 400, { code: 'INVALID_MEDIA_PATH' }, origin);
+      if (!/^nova-[a-f0-9-]+\.(mp4|webm)$/i.test(name)) return send(res, 400, { code: 'INVALID_MEDIA_PATH' }, origin);
       let video;
       try { video = await readFile(resolve(outputDir, name)); } catch (error) { if (error?.code === 'ENOENT') return send(res, 404, { error: 'Відеофайл уже недоступний.', code: 'VIDEO_FILE_NOT_FOUND' }, origin); throw error; }
-      const headers = { 'Content-Type': 'video/mp4', 'Content-Length': video.length, 'Cache-Control': 'no-store' };
+      const headers = { 'Content-Type': name.endsWith('.webm') ? 'video/webm' : 'video/mp4', 'Content-Length': video.length, 'Cache-Control': 'no-store' };
       if (origin && allowedOrigins.has(origin)) headers['Access-Control-Allow-Origin'] = origin;
       res.writeHead(200, headers); return req.method === 'HEAD' ? res.end() : res.end(video);
     }
@@ -118,4 +184,4 @@ createServer(async (req, res) => {
     const code = ['REQUEST_TOO_LARGE', 'INVALID_JSON'].includes(error.message) ? error.message : 'LOCAL_VIDEO_SERVER_ERROR';
     return send(res, code === 'REQUEST_TOO_LARGE' ? 413 : code === 'INVALID_JSON' ? 400 : 502, { error: 'Локальний відеосервер недоступний.', code }, origin);
   }
-}).listen(port, host, () => console.log(`NOVA Local Motion Forge: http://${host}:${port}`));
+}).listen(port, host, () => console.log(`NOVA Local Video: http://${host}:${port}`));
