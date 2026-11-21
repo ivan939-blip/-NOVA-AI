@@ -55,6 +55,10 @@ let voiceSpeechUnlocked = false;
 let voiceConversationMode = store.get('nova-voice-conversation-mode', false);
 let voiceNotice = '';
 let voicePhase = 'idle';
+let voiceSessionId = 0;
+let voiceSpeechUtterance = null;
+let voiceRestartTimer = null;
+let voiceRecognitionFailed = false;
 let workFiles = [];
 let workPlan = '';
 let workStatus = '';
@@ -69,36 +73,83 @@ function setVoiceNotice(message) { voiceNotice=message; const status=$('#voice-s
 function setVoicePhase(phase){voicePhase=phase;const room=$('.nova-voice-room');if(room)room.dataset.voicePhase=phase;const label=$('#voice-phase-label');if(label)label.textContent=({idle:'Готова до розмови',listening:'Слухаю тебе',thinking:'NOVA думає',speaking:'NOVA говорить'})[phase]||'Готова до розмови';}
 function unlockNOVAVoice(){
   if(!voiceOutputSupported)return;
-  try { window.speechSynthesis.resume(); const warmup=new SpeechSynthesisUtterance(' ');warmup.volume=0;warmup.lang='uk-UA';window.speechSynthesis.speak(warmup);voiceSpeechUnlocked=true; } catch(error){console.warn('NOVA speech unlock failed',error);}
+  try { window.speechSynthesis.resume(); voiceSpeechUnlocked=true; } catch(error){console.warn('NOVA speech unlock failed',error);}
 }
-function speakNOVA(text) {
-  if (!voiceOutputSupported) { setVoiceNotice('Озвучення недоступне у цьому браузері. Відкрий NOVA у Chrome або встановленому застосунку.'); return false; }
-  if (!text) return false;
-  window.speechSynthesis.cancel();
-  window.speechSynthesis.resume();
-  const utterance = new SpeechSynthesisUtterance(String(text).replace(/[`*_#]/g,' ').slice(0,3500));
-  utterance.lang = 'uk-UA';
-  utterance.rate = 0.96;
-  utterance.pitch = 1;
-  const ukrainianVoice = window.speechSynthesis.getVoices().find(voice => /^uk/i.test(voice.lang));
-  if (ukrainianVoice) utterance.voice = ukrainianVoice;
-  utterance.onstart = () => {setVoicePhase('speaking');setVoiceNotice('NOVA говорить…');};
-  utterance.onend = () => { setVoicePhase('idle');setVoiceNotice('NOVA готова до наступного повідомлення.'); if(voiceConversationMode&&(active==='chat'||active==='voice')&&!voiceListening&&!chatBusy) { try { startVoiceInput(); } catch { setVoiceNotice('Натисни мікрофон, щоб продовжити діалог.'); } } };
-  utterance.onerror = event => { if(event.error==='canceled'||event.error==='interrupted')return;setVoicePhase('idle');setVoiceNotice('NOVA не змогла озвучити відповідь ('+(event.error||'помилка')+'). Перевір синтез мовлення Android або відкрий NOVA в Chrome.'); };
-  try { window.speechSynthesis.speak(utterance); } catch(error){setVoiceNotice('Помилка голосового відтворення: '+(error?.message||'невідомо'));return false;}
-  return true;
+function scheduleNextVoiceTurn(sessionId){
+  clearTimeout(voiceRestartTimer);
+  if(!voiceConversationMode||sessionId!==voiceSessionId||chatBusy||voiceListening||active!=='voice')return;
+  voiceRestartTimer=setTimeout(()=>{
+    if(voiceConversationMode&&sessionId===voiceSessionId&&!chatBusy&&!voiceListening&&active==='voice')startVoiceInput();
+  },500);
 }
-function startVoiceInput() {
-  if (!voiceInputSupported || voiceListening) { setVoiceNotice(voiceInputSupported ? 'NOVA уже слухає.' : 'Android WebView не підтримує розпізнавання голосу. Відкрий NOVA у Chrome для голосової розмови.'); return; }
-  const recognition = new SpeechRecognition();
-  currentRecognition = recognition;
-  recognition.lang = 'uk-UA'; recognition.interimResults = true; recognition.maxAlternatives = 1;
-  recognition.onstart = () => { setVoicePhase('listening');voiceListening = true; voiceNotice = 'NOVA слухає…'; const status=$('#voice-status'); if(status)status.textContent=voiceNotice; const button=$('#voice-input'); if(button)button.disabled=true; };
-  let transcript=''; let finalTranscript='';
-  recognition.onresult = event => { transcript=Array.from(event.results).map(result=>result[0]?.transcript || '').join(' ').trim(); finalTranscript=Array.from(event.results).filter(result=>result.isFinal).map(result=>result[0]?.transcript || '').join(' ').trim() || finalTranscript; const input=$('#chat-input'); if(input) input.value=transcript; setVoiceNotice(transcript ? (voiceSendAfterRecognition?'Фразу розпізнано — NOVA надішле її після завершення.':'Текст додано. Перевір його та надішли.') : 'Говори…'); };
-  recognition.onerror = event => { if(event.error==='not-allowed'||event.error==='service-not-allowed'){voiceConversationMode=false;store.set('nova-voice-conversation-mode',false);} setVoiceNotice(event.error === 'not-allowed' ? 'Дозволь доступ до мікрофона для голосового діалогу.' : 'Не вдалося розпізнати голос. Спробуй ще раз.'); };
-  recognition.onend = () => { setVoicePhase('idle');voiceListening = false; currentRecognition=null; const button=$('#voice-input'); if(button)button.disabled=false; const text=(finalTranscript||transcript).trim(); if((voiceSendAfterRecognition||voiceConversationMode)&&text&&!chatBusy){ if(active==='voice'){voiceConversationMode=true;voiceAutoSpeak=true;}learnAdultVocabulary(text); messages.push({role:'user',text}); persistChat(); askNOVA(text); } };
-  try { recognition.start(); } catch(error) { currentRecognition=null; voiceListening=false; setVoiceNotice('Не вдалося ввімкнути мікрофон: '+(error?.message||'перевір дозвіл Android')); }
+function speakNOVA(text){
+  if(!voiceOutputSupported){setVoiceNotice('Голос NOVA недоступний у цьому браузері. Спробуй Chrome і перевір голосовий рушій Android.');return false;}
+  if(!text)return false;
+  const sessionId=voiceSessionId;
+  try {
+    window.speechSynthesis.cancel();
+    const utterance=new SpeechSynthesisUtterance(String(text).replace(/[`*_#]/g,' ').slice(0,3500));
+    voiceSpeechUtterance=utterance;
+    utterance.lang='uk-UA';utterance.rate=0.96;utterance.pitch=1;utterance.volume=1;
+    const voices=window.speechSynthesis.getVoices();
+    const voice=voices.find(v=>/^uk/i.test(v.lang))||voices.find(v=>/^ru/i.test(v.lang))||voices.find(v=>/^en/i.test(v.lang));
+    if(voice)utterance.voice=voice;
+    utterance.onstart=()=>{if(sessionId!==voiceSessionId)return;setVoicePhase('speaking');setVoiceNotice('NOVA говорить…');};
+    utterance.onend=()=>{
+      if(voiceSpeechUtterance===utterance)voiceSpeechUtterance=null;
+      if(sessionId!==voiceSessionId)return;
+      setVoicePhase('idle');setVoiceNotice('NOVA слухатиме твою наступну фразу.');
+      scheduleNextVoiceTurn(sessionId);
+    };
+    utterance.onerror=event=>{
+      if(voiceSpeechUtterance===utterance)voiceSpeechUtterance=null;
+      if(sessionId!==voiceSessionId||event.error==='canceled'||event.error==='interrupted')return;
+      setVoicePhase('idle');setVoiceNotice('Не вдалося відтворити голос NOVA ('+(event.error||'помилка')+'). Перевір Android Text-to-Speech.');
+    };
+    setVoicePhase('speaking');setVoiceNotice('NOVA озвучує відповідь…');
+    window.speechSynthesis.resume();
+    window.speechSynthesis.speak(utterance);
+    return true;
+  }catch(error){setVoicePhase('idle');setVoiceNotice('Помилка голосу: '+(error?.message||'невідома'));return false;}
+}
+function startVoiceInput(){
+  if(!voiceInputSupported){setVoiceNotice('Розпізнавання голосу недоступне у цьому Android WebView. Відкрий NOVA у Chrome.');return;}
+  if(voiceListening||currentRecognition||chatBusy)return;
+  clearTimeout(voiceRestartTimer);
+  const sessionId=voiceSessionId;
+  let recognition;
+  try{recognition=new SpeechRecognition();}catch(error){setVoiceNotice('Мікрофон недоступний: '+(error?.message||'помилка'));return;}
+  currentRecognition=recognition;
+  recognition.lang='uk-UA';recognition.interimResults=true;recognition.maxAlternatives=1;
+  let transcript='';let finalTranscript='';let failed=false;
+  recognition.onstart=()=>{if(sessionId!==voiceSessionId)return;voiceListening=true;setVoicePhase('listening');setVoiceNotice('NOVA слухає…');const b=$('#voice-input');if(b)b.disabled=true;};
+  recognition.onresult=event=>{
+    if(sessionId!==voiceSessionId)return;
+    transcript=Array.from(event.results).map(r=>r[0]?.transcript||'').join(' ').trim();
+    finalTranscript=Array.from(event.results).filter(r=>r.isFinal).map(r=>r[0]?.transcript||'').join(' ').trim()||finalTranscript;
+    const input=$('#chat-input');if(input)input.value=transcript;
+    setVoiceNotice(transcript?'Почула: '+transcript:'Говори…');
+  };
+  recognition.onerror=event=>{
+    failed=true;
+    if(sessionId!==voiceSessionId)return;
+    const permission=event.error==='not-allowed'||event.error==='service-not-allowed';
+    if(permission){voiceConversationMode=false;store.set('nova-voice-conversation-mode',false);}
+    setVoiceNotice(permission?'Дозволь доступ до мікрофона в налаштуваннях Android.':'Помилка розпізнавання ('+event.error+'). Спробуй ще раз.');
+  };
+  recognition.onend=()=>{
+    if(currentRecognition===recognition)currentRecognition=null;
+    voiceListening=false;const b=$('#voice-input');if(b)b.disabled=false;
+    if(sessionId!==voiceSessionId)return;
+    const text=(finalTranscript||transcript).trim();
+    if(text&&!chatBusy&&(voiceConversationMode||voiceSendAfterRecognition)){
+      setVoicePhase('thinking');
+      learnAdultVocabulary(text);messages.push({role:'user',text});persistChat();
+      askNOVA(text);
+    }else if(voiceConversationMode&&!failed){setVoicePhase('idle');setVoiceNotice('Слухаю далі…');scheduleNextVoiceTurn(sessionId);}
+    else setVoicePhase('idle');
+  };
+  try{recognition.start();}catch(error){currentRecognition=null;voiceListening=false;setVoicePhase('idle');setVoiceNotice('Не вдалося ввімкнути мікрофон: '+(error?.message||'перевір дозволи'));}
 }
 
 const audioStore = (() => {
@@ -129,8 +180,8 @@ function navItem(id, label) { return `<button class="nav-item ${active===id?'act
 function hero() { return `<section class="hero home-hero"><img class="heroine-art" src="${import.meta.env.BASE_URL}nova-heroine.png" alt="Готична героїня NOVA AI"/><div class="hero-scrim"></div><button class="menu-mark" data-go="work" aria-label="Режим роботи NOVA">☰</button><div class="hero-logo"><b>NOVA AI<span>✦</span></b><small>Your AI. Your world.</small></div><button class="crown-mark" data-go="adult" aria-label="18+ Mode">♛</button><button class="avatar-mark" id="open-auth" aria-label="Профіль">●</button><div class="free-panel"><b>∞</b><strong>Безкоштовно<br>Назавжди</strong><small>✓ Без лімітів<br>✓ Без підписок<br>✓ Без карток</small></div></section>`; }
 function homeCard(id, iconText, title, subtitle){return `<button class="home-card" data-go="${id}"><span>${iconText}</span><b>${title}</b><small>${subtitle}</small></button>`;}
 function home(){return `<section class="screen home-screen">${hero()}<button class="home-prompt" data-go="chat"><span>✦</span><div><b>Що ти хочеш створити?</b><small>Запитай мене або обери розділ...</small></div><i>↑</i></button><div class="home-grid">${homeCard('image','▧','Image Studio','Створи зображення')}${homeCard('video','▶','Video Studio','Створи відео')}${homeCard('characters','♙','Characters','Твої персонажі')}${homeCard('chat','◈','AI Chat','Спілкуйся зі мною')}${homeCard('library','▣','My Library','Твоя бібліотека')}${homeCard('adult','18+','18+ Mode','Для дорослих')}</div></section>`; }
-function stopVoiceRoom(){setVoicePhase('idle');voiceConversationMode=false;store.set('nova-voice-conversation-mode',false);try{currentRecognition?.abort();}catch{}currentRecognition=null;voiceListening=false;window.speechSynthesis?.cancel();setVoiceNotice('Розмову завершено.');}
-function voiceRoom(){const latest=messages.slice(-6);return `<section class="screen nova-voice-room" data-voice-phase="${voicePhase}"><button class="voice-back" id="voice-back">← Повернутися до чату</button><div class="voice-room-hero"><img src="${import.meta.env.BASE_URL}nova-heroine.png" alt="NOVA"/><div class="voice-room-shade"></div><div class="voice-room-title"><span>LIVE · NOVA AI</span><h2>Голосова розмова</h2><p id="voice-status">${esc(voiceNotice||'Натисни «Почати розмову»')}</p></div></div><div class="voice-visualizer" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div><p class="voice-phase-label" id="voice-phase-label">${({idle:"Готова до розмови",listening:"Слухаю тебе",thinking:"NOVA думає",speaking:"NOVA говорить"})[voicePhase]}</p><div class="voice-room-actions"><button id="voice-room-start">${voiceConversationMode?'🎙 Слухати':'🎙 Почати розмову'}</button><button id="voice-room-stop"  >■ Завершити</button></div><div class="voice-room-transcript" aria-live="polite">${latest.map(m=>`<p><b>${m.role==='nova'?'NOVA':'Ти'}:</b> ${esc(m.text)}</p>`).join('')}</div>${!voiceInputSupported?'<p class="voice-room-help">Розпізнавання голосу недоступне у цьому Android WebView. Спробуй Chrome.</p>':''}</section>`;}
+function stopVoiceRoom(){voiceSessionId++;clearTimeout(voiceRestartTimer);setVoicePhase('idle');voiceConversationMode=false;store.set('nova-voice-conversation-mode',false);try{currentRecognition?.abort();}catch{}currentRecognition=null;voiceListening=false;voiceSpeechUtterance=null;window.speechSynthesis?.cancel();setVoiceNotice('Розмову завершено.');}
+function voiceRoom(){const latest=messages.slice(-6);return `<section class="screen nova-voice-room" data-voice-phase="${voicePhase}"><button class="voice-back" id="voice-back">← Повернутися до чату</button><div class="voice-room-hero"><img src="${import.meta.env.BASE_URL}nova-heroine.png" alt="NOVA"/><div class="voice-room-shade"></div><div class="voice-room-title"><span>LIVE · NOVA AI</span><h2>Голосова розмова</h2><p id="voice-status">${esc(voiceNotice||'Натисни «Почати розмову»')}</p></div></div><div class="voice-visualizer" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div><p class="voice-phase-label" id="voice-phase-label">${({idle:"Готова до розмови",listening:"Слухаю тебе",thinking:"NOVA думає",speaking:"NOVA говорить"})[voicePhase]}</p><div class="voice-room-actions"><button id="voice-room-start">${voiceConversationMode?'🎙 Слухати':'🎙 Почати розмову'}</button><button id="voice-room-stop">■ Завершити</button><button id="voice-room-test" type="button">🔊 Перевірити голос</button></div><div class="voice-room-transcript" aria-live="polite">${latest.map(m=>`<p><b>${m.role==='nova'?'NOVA':'Ти'}:</b> ${esc(m.text)}</p>`).join('')}</div>${!voiceInputSupported?'<p class="voice-room-help">Розпізнавання голосу недоступне у цьому Android WebView. Спробуй Chrome.</p>':''}</section>`;}
 function chat() { const onlyWelcome=messages.length===1&&messages[0].role==='nova'; const voiceState=voiceNotice || (voiceInputSupported?'Натисни мікрофон і скажи повідомлення.':'Голосове введення не підтримується цим браузером.'); return `<section class="screen chat-screen">${activeCharacter?`<div class="active-persona">✧ ${esc(activeCharacter.name)} <button id="clear-persona">×</button></div>`:''}<div class="chat-topbar"><div><span>NEURAL CHANNEL · ${chatBusy ? 'CONNECTING' : 'ONLINE'}</span><h2>${esc(chatTitle(conversations.find(c=>c.id===activeConversationId)||{}))}</h2></div><button class="round" id="clear-chat" aria-label="Очистити чат">↻</button></div><button type="button" class="open-voice-room" id="open-voice-room">🎙 Окремий голосовий режим</button><div class="voice-bar"><button type="button" id="voice-input" ${voiceInputSupported?'':'disabled'} aria-label="Сказати повідомлення">🎙</button><span id="voice-status">${esc(voiceState)}</span><button type="button" id="voice-test" ${voiceOutputSupported?'':'disabled'} aria-label="Перевірити голос NOVA">🔊</button><label><input id="voice-autospeak" type="checkbox" ${voiceAutoSpeak?'checked':''} ${voiceOutputSupported?'':'disabled'}> Озвучувати NOVA</label><label><input id="voice-send-after-recognition" type="checkbox" ${voiceSendAfterRecognition?'checked':''} ${voiceInputSupported?'':'disabled'}> Надсилати голосом</label><button type="button" id="voice-conversation" class="voice-conversation-toggle" ${voiceInputSupported&&voiceOutputSupported?'':'disabled'} aria-pressed="${voiceConversationMode}">${voiceConversationMode?'■ Завершити діалог':'☎ Голосовий діалог'}</button></div><div class="messages">${messages.map((m,index)=>`<article class="message ${m.role}"><div class="message-avatar">${m.role==='user'?'YOU':'N'}</div><div class="message-body"><b>${m.role==='user'?'Ти':'NOVA'}</b><p>${esc(m.text)}</p>${m.role==='nova'&&m.text!==welcomeMessage.text?'<button class="copy-answer" type="button" data-copy-answer="'+esc(m.text)+'">Копіювати</button><button class="speak-answer" type="button" data-speak-index="'+index+'">🔊 Озвучити</button>':''}</div></article>`).join('')}${onlyWelcome?`<div class="prompt-grid"><button data-suggestion="Допоможи написати сильний промпт для Image Studio">✦ Створити образ</button><button data-suggestion="Запропонуй концепцію короткого темного відео">▷ Спланувати відео</button><button data-suggestion="Допоможи з ідеєю для мого проєкту">◈ Обміркувати ідею</button></div>`:''}</div><form class="composer" id="chat-form"><button type="button" id="chat-voice-mode" class="chat-voice-mode" aria-label="Відкрити голосову розмову з NOVA">🎙<span>Голос</span></button><textarea id="chat-input" rows="1" maxlength="4000" ${chatBusy?'disabled':''} placeholder="Напиши NOVA..." autocomplete="off"></textarea><button ${chatBusy?'disabled':''} aria-label="Надіслати">${chatBusy?'…':'↑'}</button></form><p class="composer-note">NOVA може помилятися. Перевіряй важливу інформацію.</p></section>`; }
 function imageStudio() { return `<section class="screen"><div class="page-head"><span>01 // VISUAL FORGE</span><h2>Image Studio</h2><p>Створи кінематографічний образ із текстового опису або власного фото.</p></div><div class="studio-card image-card"><div class="fake-art">✦<small>GENERATION CORE</small></div><label class="image-picker">▧ Додати фото або зображення<input id="image-reference-file" type="file" accept="image/jpeg,image/png,image/webp" hidden></label>${imageReference?`<div class="reference-preview"><img src="${imageReference}" alt="Твоє фото-референс"/><div><b>${esc(imageReferenceName)}</b><small>Фото буде стиснено до 512 px і надіслано лише для цієї генерації.</small></div><button class="icon-button" id="clear-image-reference" aria-label="Прибрати фото">×</button></div><div class="identity-controls"><b>Людина на фото</b><div class="chips"><button type="button" data-presentation="feminine" class="${imagePresentation==='feminine'?'selected':''}">Жіночий образ</button><button type="button" data-presentation="masculine" class="${imagePresentation==='masculine'?'selected':''}">Чоловічий образ</button><button type="button" data-presentation="unspecified" class="${imagePresentation==='unspecified'?'selected':''}">Не вказувати</button></div><label class="identity-toggle"><input id="preserve-face" type="checkbox" ${preserveFace?'checked':''}> Зберігати ключові риси обличчя</label><small>Це вибір користувача, не автоматичне визначення за фото. Генеративна модель може трохи змінити риси.</small></div>`:`<p class="notice">JPEG, PNG або WebP до 5 МБ. Фото не зберігається NOVA після запиту.</p>`}<label>Твій промпт<textarea id="image-prompt" maxlength="1800" placeholder="Наприклад: перетвори фото на готичний неоновий портрет...">${esc(imagePrompt)}</textarea></label><div class="chips"><button type="button" data-prompt-chip="dark gothic cyberpunk">Cyberpunk</button><button type="button" data-prompt-chip="gothic dark fantasy">Gothic</button><button type="button" data-prompt-chip="cinematic portrait">Portrait</button></div><button class="primary" id="generate-image" ${imageBusy?'disabled':''}>${imageBusy?'⟳ Генерую...':imageReference?'✦ Генерувати за фото':'✦ Створити зображення'}</button>${imageError?'<p class="image-error">'+esc(imageError)+'</p>':''}${imageResult?'<div class="generated-image"><img src="'+imageResult+'" alt="Згенероване NOVA зображення"/><a class="secondary download-image" download="nova-ai-image.jpg" href="'+imageResult+'">↓ Завантажити на пристрій</a><button class="secondary" id="save-image-concept">Зберегти опис до Library</button></div>':''}</div><p class="notice">Без фото використовується FLUX Schnell. Із фото — FLUX.2 reference generation; доступність залежить від лімітів Workers AI.</p></section>`; }
 function videoStudio() { return `<section class="screen"><div class="page-head"><span>02 // MOTION VOID</span><h2>Video Studio</h2><p>Підготуй сценарій, кадри та промпт без платних сервісів.</p></div><div class="studio-card"><div class="video-preview"><span>▶</span><i>00:${videoDuration.padStart(2,'0')}</i></div><label>Ідея відео<textarea id="video-prompt" maxlength="1800" placeholder="Наприклад: героїня йде крізь неоновий дощ, камера повільно наближається...">${esc(videoPrompt)}</textarea></label><label class="video-field-label">Стиль</label><div class="chips video-styles"><button type="button" data-video-style="dark cinematic" class="${videoStyle==='dark cinematic'?'selected':''}">Cinematic</button><button type="button" data-video-style="gothic fantasy" class="${videoStyle==='gothic fantasy'?'selected':''}">Gothic</button><button type="button" data-video-style="neon cyberpunk" class="${videoStyle==='neon cyberpunk'?'selected':''}">Cyberpunk</button></div><label class="video-field-label">Тривалість</label><div class="options"><button type="button" data-duration="5" class="${videoDuration==='5'?'selected':''}">5 с</button><button type="button" data-duration="8" class="${videoDuration==='8'?'selected':''}">8 с</button><button type="button" data-duration="12" class="${videoDuration==='12'?'selected':''}">12 с</button></div><label class="video-field-label">Формат кадру</label><div class="options"><button type="button" data-ratio="9:16" class="${videoRatio==='9:16'?'selected':''}">9:16</button><button type="button" data-ratio="16:9" class="${videoRatio==='16:9'?'selected':''}">16:9</button><button type="button" data-ratio="1:1" class="${videoRatio==='1:1'?'selected':''}">1:1</button></div><button class="secondary" id="build-video-plan" type="button">✦ Створити розкадрування</button>${videoStoryboard?`<div class="video-storyboard"><b>ТВОЯ РОЗКАДРОВКА</b><p>${esc(videoStoryboard).replace(/\n/g,'<br>')}</p><button class="secondary" id="copy-video-plan" type="button">Копіювати готовий промпт</button></div>`:''}<button class="primary" data-draft="video">▷ Зберегти сценарій до Library</button><button class="primary" id="generate-real-video" type="button" ${videoBusy?"disabled":""}>${videoBusy?"⟳ Створюю відео...":"✦ Створити безкоштовне відео"}</button><div class="video-job-status" role="status">${esc(videoStatus||videoError)}</div>${videoUrl?'<video class="generated-video" controls playsinline src="'+esc(videoUrl)+'"></video><a href="'+esc(videoUrl)+'" target="_blank" rel="noopener">Відкрити відеофайл</a>':''}</div><p class="notice">Локальний Motion Forge · рух камери, неоновий стиль і ambient-аудіо без ключів, лімітів та підписок.</p></section>`; }
@@ -308,8 +359,9 @@ function bind(){
   $('#open-voice-room')?.addEventListener('click',()=>{active='voice';render();});
   $('#chat-voice-mode')?.addEventListener('click',()=>{active='voice';render();});
   $('#voice-back')?.addEventListener('click',()=>{stopVoiceRoom();active='chat';render();});
-  $('#voice-room-start')?.addEventListener('click',()=>{unlockNOVAVoice();if(!voiceInputSupported){setVoiceNotice('На цьому Android WebView голосове введення недоступне. Відкрий NOVA AI у Chrome.');return;}if(!voiceOutputSupported){setVoiceNotice('На цьому пристрої недоступне озвучення. Перевір налаштування синтезу мовлення Android.');return;}voiceConversationMode=true;voiceAutoSpeak=true;voiceSendAfterRecognition=true;store.set('nova-voice-conversation-mode',true);store.set('nova-voice-autospeak',true);store.set('nova-voice-send-after-recognition',true);render();startVoiceInput();});
+  $('#voice-room-start')?.addEventListener('click',()=>{unlockNOVAVoice();if(!voiceInputSupported){setVoiceNotice('На цьому Android WebView голосове введення недоступне. Відкрий NOVA AI у Chrome.');return;}if(!voiceOutputSupported){setVoiceNotice('На цьому пристрої недоступне озвучення. Перевір налаштування синтезу мовлення Android.');return;}if(voiceConversationMode){if(!voiceListening&&!chatBusy)startVoiceInput();return;}voiceSessionId++;voiceConversationMode=true;voiceAutoSpeak=true;voiceSendAfterRecognition=true;store.set('nova-voice-conversation-mode',true);store.set('nova-voice-autospeak',true);store.set('nova-voice-send-after-recognition',true);render();startVoiceInput();});
   $('#voice-room-stop')?.addEventListener('click',()=>{stopVoiceRoom();render();});
+  $('#voice-room-test')?.addEventListener('click',()=>{unlockNOVAVoice();speakNOVA('Привіт! Я NOVA. Тепер ми можемо розмовляти голосом.');});
   $('#voice-input')?.addEventListener('click',startVoiceInput);
   $('#voice-conversation')?.addEventListener('click',()=>{unlockNOVAVoice();voiceConversationMode=!voiceConversationMode;store.set('nova-voice-conversation-mode',voiceConversationMode);if(voiceConversationMode){voiceAutoSpeak=true;voiceSendAfterRecognition=true;store.set('nova-voice-autospeak',true);store.set('nova-voice-send-after-recognition',true);setVoiceNotice('Голосовий діалог увімкнено. Говори після сигналу.');startVoiceInput();}else{window.speechSynthesis?.cancel();setVoiceNotice('Голосовий діалог завершено.');}const b=$('#voice-conversation');if(b){b.textContent=voiceConversationMode?'■ Завершити діалог':'☎ Голосовий діалог';b.setAttribute('aria-pressed',String(voiceConversationMode));}});
   $('#voice-autospeak')?.addEventListener('change',event=>{voiceAutoSpeak=event.target.checked;store.set('nova-voice-autospeak',voiceAutoSpeak);});
