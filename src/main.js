@@ -313,17 +313,27 @@ async function askNOVA(text) {
         }
       };
 
+      let lastChunkAt=Date.now();
+      let streamFinished=false;
       while(true) {
-        const {value,done}=await reader.read();
-        if(done) break;
-        buffer+=decoder.decode(value,{stream:true});
+        const next=await Promise.race([
+          reader.read(),
+          new Promise(resolve=>setTimeout(()=>resolve({idle:true}),12000))
+        ]);
+        if(next.idle){
+          if(reply.text.trim()&&Date.now()-lastChunkAt>=12000){streamFinished=true;break;}
+          continue;
+        }
+        if(next.done){streamFinished=true;break;}
+        lastChunkAt=Date.now();
+        buffer+=decoder.decode(next.value,{stream:true});
         const events=buffer.split(/\r?\n\r?\n/);
         buffer=events.pop() || '';
         events.forEach(parseEvent);
       }
-      buffer+=decoder.decode();
-      if(buffer.trim()) parseEvent(buffer);
-      if(!reply.text.trim()) reply.text='Модель завершила запит, але не надіслала текстових фрагментів.';
+      if(streamFinished){buffer+=decoder.decode();if(buffer.trim())parseEvent(buffer);}
+      if(!reply.text.trim()) reply.text='Модель не надіслала текстової відповіді. Спробуй ще раз.';
+      if(streamFinished){try{await reader.cancel();}catch{}}
     } else {
       const data=await result.json();
       if(!data.answer) throw new Error(data.error || 'Сервер не повернув текст відповіді.');
