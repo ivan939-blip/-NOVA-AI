@@ -74,6 +74,8 @@ let workScopes = store.get('nova-work-scopes', { files:true, browser:false, apps
 if(!workScopes || typeof workScopes !== 'object') workScopes={files:true,browser:false,apps:false};
 let workActionQueue = store.get('nova-work-action-queue', []);
 if(!Array.isArray(workActionQueue)) workActionQueue=[];
+let workDesktopApps = [];
+let workPendingApp = '';
 const localVideoApi = (import.meta.env.VITE_LOCAL_VIDEO_API_URL || 'http://127.0.0.1:8189/api/video').replace(/\/$/, '');
 
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -433,6 +435,24 @@ function installNovaDirector(){
   director.querySelectorAll('[data-nova-focus]').forEach(button=>button.onclick=()=>{novaFocus=button.dataset.novaFocus;store.set('nova-director-focus',novaFocus);render();});
 }
 
+async function loadDesktopApplications(){
+  if(!window.NovaDesktop?.listApplications)return;
+  try { workDesktopApps=await window.NovaDesktop.listApplications(); render(); } catch { workDesktopApps=[]; }
+}
+
+function findSpokenApplication(command){
+  const text=command.toLowerCase();
+  const aliases={chrome:['chrome','хром','гугл'],edge:['edge','едж','майкрософт'],explorer:['провідник','папк'],notepad:['блокнот','notepad'],calculator:['калькулятор','calc']};
+  return workDesktopApps.find(app=>(aliases[app.id]||[app.label.toLowerCase()]).some(alias=>text.includes(alias)));
+}
+
+function updatePendingAppUI(){
+  const select=$('#work-app-select'), open=$('#open-work-app'), notice=$('#work-voice-notice');
+  if(select)select.value=workPendingApp;
+  if(open)open.disabled=!workPendingApp;
+  if(notice&&workPendingApp){const app=workDesktopApps.find(item=>item.id===workPendingApp);notice.textContent=`Розпізнано: ${app?.label||'програма'}. Підтвердь відкриття кнопкою нижче.`;}
+}
+
 function startWorkVoiceCommand(){
   const task=$('#work-task'), notice=$('#work-voice-notice');
   if(!task)return;
@@ -445,7 +465,9 @@ function startWorkVoiceCommand(){
     if(!command)return;
     task.value=command;
     const normalized=command.toLowerCase();
-    if(/запусти|відкрий програм|launch/.test(normalized)){workScopes.apps=true;workActionQueue=[{title:`Дія у програмі: ${command}`}];}
+    const spokenApp=findSpokenApplication(command);
+    if(spokenApp){workScopes.apps=true;workPendingApp=spokenApp.id;workActionQueue=[{title:`Відкрити програму: ${spokenApp.label}`}];updatePendingAppUI();}
+    else if(/запусти|відкрий програм|launch/.test(normalized)){workScopes.apps=true;workActionQueue=[{title:`Дія у програмі: ${command}`}];if(notice)notice.textContent='Яку саме програму відкрити? Назви Chrome, Edge, Провідник, Блокнот або Калькулятор.';}
     else if(/відкрий|open/.test(normalized)){workScopes.browser=true;workActionQueue=[{title:`Браузерна дія: ${command}`}];}
     else {workActionQueue=[{title:`Робоче завдання: ${command}`}];}
     store.set('nova-work-scopes',workScopes);store.set('nova-work-action-queue',workActionQueue);
@@ -464,8 +486,23 @@ function installWorkConsole(){
   const queued=workActionQueue.length?`<ul>${workActionQueue.map(item=>`<li><b>${esc(item.title)}</b><small>Очікує твого окремого підтвердження</small></li>`).join('')}</ul>`:'';
   console.innerHTML=`<b>КОНСОЛЬ ДІЙ NOVA</b><p>Обери, для чого підготувати кроки. NOVA не натискає кнопки, не керує програмами та не змінює дані без окремого підтвердження.</p><button type="button" class="secondary" id="work-voice-command">🎙 Сказати команду</button><small id="work-voice-notice">Скажи, наприклад: «Відкрий сайт і підготуй перевірку» або «Запусти програму та створи список кроків».</small><label><input type="checkbox" data-work-scope="files" ${workScopes.files?'checked':''}> Обрані файли й папки</label><label><input type="checkbox" data-work-scope="browser" ${workScopes.browser?'checked':''}> Браузер: підготувати дії та перевірки</label><label><input type="checkbox" data-work-scope="apps" ${workScopes.apps?'checked':''}> Програми: підготувати послідовність дій</label><button type="button" class="secondary" id="build-work-queue">＋ Створити список дій</button>${queued}`;
   task.closest('label')?.after(console);
+  if(window.NovaDesktop){
+    const launcher=document.createElement('div');
+    launcher.className='work-app-launcher';
+    launcher.innerHTML=`<label>Програма для відкриття<select id="work-app-select"><option value="">Обери програму…</option>${workDesktopApps.map(app=>`<option value="${esc(app.id)}" ${workPendingApp===app.id?'selected':''}>${esc(app.label)}</option>`).join('')}</select></label><button type="button" class="secondary" id="open-work-app" ${workPendingApp?'':'disabled'}>↗ Підтвердити відкриття</button>`;
+    console.querySelector('#work-voice-command')?.after(launcher);
+  } else {
+    const note=document.createElement('small');note.className='work-desktop-note';note.textContent='Відкривання програм доступне у Windows desktop-версії NOVA.';console.querySelector('#work-voice-command')?.after(note);
+  }
   console.querySelectorAll('[data-work-scope]').forEach(input=>input.onchange=()=>{workScopes[input.dataset.workScope]=input.checked;store.set('nova-work-scopes',workScopes);});
   console.querySelector('#work-voice-command')?.addEventListener('click',startWorkVoiceCommand);
+  console.querySelector('#work-app-select')?.addEventListener('change',event=>{workPendingApp=event.target.value;updatePendingAppUI();});
+  console.querySelector('#open-work-app')?.addEventListener('click',async()=>{
+    const appInfo=workDesktopApps.find(app=>app.id===workPendingApp);if(!appInfo||!window.NovaDesktop)return;
+    if(!window.confirm(`Відкрити «${appInfo.label}» на цьому комп’ютері?`))return;
+    const result=await window.NovaDesktop.openApplication(appInfo.id);
+    workStatus=result.ok?`Відкрито: ${result.label}.`:(result.error||'Не вдалося відкрити програму.');render();
+  });
   console.querySelector('#build-work-queue')?.addEventListener('click',()=>{
     const taskText=task.value.trim()||'Поточне завдання';
     workActionQueue=[];
@@ -561,6 +598,7 @@ function bind(){
 function bindAuth(){ $('#close-auth')?.addEventListener('click',()=>$('.modal-backdrop')?.remove()); document.querySelectorAll('[data-auth-mode]').forEach(button=>button.addEventListener('click',()=>{authMode=button.dataset.authMode;authNotice='';$('.modal-backdrop')?.remove();$('#app').insertAdjacentHTML('beforeend',authModal());bindAuth();})); $('#sign-out')?.addEventListener('click',async()=>{const {error}=await supabase?.auth.signOut();if(error){authNotice=error.message;render();return;}session=null;render();}); $('#auth-form')?.addEventListener('submit',async e=>{e.preventDefault();const email=$('#auth-email')?.value.trim(),password=$('#auth-password')?.value,confirm=$('#auth-password-confirm')?.value;const form=$('#auth-form');const button=form?.querySelector('button');if(authMode==='register'&&password!==confirm){authNotice='Паролі не збігаються.';render();return;}if(button)button.disabled=true;const result=authMode==='register'?await supabase.auth.signUp({email,password,options:{emailRedirectTo:window.location.origin}}):await supabase.auth.signInWithPassword({email,password});if(result.error){authNotice=result.error.message;render();return;}session=result.data.session;if(!session){authNotice=authMode==='register'?'Лист для підтвердження надіслано. Підтвердь email, потім увійди.':'Потрібне підтвердження email. Перевір пошту та увійди повторно.';authMode='login';$('.modal-backdrop')?.remove();$('#app').insertAdjacentHTML('beforeend',authModal());bindAuth();return;}authNotice='';await loadCloudLibrary();render();});}
 async function initializeCloud(){if(!supabase)return;const {data}=await supabase.auth.getSession();session=data.session;if(session)await loadCloudLibrary();supabase.auth.onAuthStateChange(async(_event,next)=>{session=next;if(session)await loadCloudLibrary();render();});}
 await initializeCloud();
+loadDesktopApplications();
 render();
 hydrateMusicTracks();
 if ('serviceWorker' in navigator) navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`);
