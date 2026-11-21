@@ -343,8 +343,16 @@ async function askNOVA(text) {
     persistChat();
     const newestReply=messages.slice().reverse().find(message=>message.role==='nova');
     render();
-    if((requestVoiceSession===null?voiceAutoSpeak:(voiceConversationMode&&requestVoiceSession===voiceSessionId))&&newestReply?.text&&newestReply.text!==welcomeMessage.text&&!newestReply.text.startsWith('ДІАГНОСТИКА:')) speakNOVA(newestReply.text);
-    else if(voiceConversationMode)setVoicePhase('idle');
+    const voiceSessionActive=requestVoiceSession!==null&&voiceConversationMode&&requestVoiceSession===voiceSessionId;
+    const shouldSpeak=requestVoiceSession===null?voiceAutoSpeak:voiceSessionActive;
+    if(shouldSpeak&&newestReply?.text&&newestReply.text!==welcomeMessage.text&&!newestReply.text.startsWith('ДІАГНОСТИКА:')){
+      const started=speakNOVA(newestReply.text);
+      if(!started&&voiceSessionActive)setVoiceNotice('NOVA отримала текст, але не змогла озвучити його. Перевір голос Android.');
+    }else if(voiceSessionActive){
+      setVoicePhase('idle');
+      const errorText=newestReply?.text||'Сервер не повернув відповідь.';
+      setVoiceNotice('NOVA не отримала відповідь від AI: '+errorText.slice(0,220));
+    }
   }
 }
 async function compactImage(dataUrl){return new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>{const canvas=document.createElement('canvas');const max=768,scale=Math.min(1,max/Math.max(img.width,img.height));canvas.width=Math.round(img.width*scale);canvas.height=Math.round(img.height*scale);const ctx=canvas.getContext('2d');ctx.drawImage(img,0,0,canvas.width,canvas.height);resolve(canvas.toDataURL('image/jpeg',0.78));};img.onerror=()=>reject(new Error('Не вдалося підготувати зображення для збереження.'));img.src=dataUrl;});}
