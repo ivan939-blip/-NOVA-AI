@@ -36,6 +36,8 @@ let imageSeed = store.get('nova-image-seed', Math.floor(Math.random()*9_999_999_
 let imageStrictPrompt = store.get('nova-image-strict-prompt', true);
 let adultModel = store.get('nova-adult-image-model', 'unspecified');
 let adultStyle = store.get('nova-adult-image-style', 'photorealistic');
+let novaAura = store.get('nova-director-aura', 'violet');
+let novaFocus = store.get('nova-director-focus', 'portrait');
 let customCharacters = store.get('nova-characters', []);
 let characterNotice = '';
 let activeCharacter = store.get('nova-active-character', null);
@@ -243,7 +245,7 @@ async function generateImage(){
   try{
     const res=await fetch(`${import.meta.env.BASE_URL}api/image`,{
       method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({prompt,referenceImage:imageReference||undefined,presentation:imagePresentation,preserveFace,adultMode:Boolean(adult&&active==='adult'),adultModel,adultStyle,seed:imageSeed,strictPrompt:imageStrictPrompt}),signal:controller.signal
+      body:JSON.stringify({prompt,referenceImage:imageReference||undefined,presentation:imagePresentation,preserveFace,adultMode:Boolean(adult&&active==='adult'),adultModel,adultStyle,novaAura,novaFocus,seed:imageSeed,strictPrompt:imageStrictPrompt}),signal:controller.signal
     });
     const data=await res.json().catch(()=>({}));
     if(!res.ok)throw new Error(data.error||data.code||'Сервер не повернув зображення.');
@@ -414,6 +416,18 @@ async function generateRealVideo() {
   } catch(e) { videoError=e.message||'Помилка генерації відео.'; videoStatus=''; }
   finally { videoBusy=false; render(); }
 }
+function installNovaDirector(){
+  const prompt=$('#image-prompt');
+  if(!prompt||$('#nova-director'))return;
+  const director=document.createElement('section');
+  director.id='nova-director';
+  director.className='nova-director';
+  director.innerHTML=`<b>✦ NOVA Director</b><small>Твоя ідея + постійний авторський почерк NOVA.</small><label>Аура світу</label><div class="chips"><button type="button" data-nova-aura="violet" class="${novaAura==='violet'?'selected':''}">Violet</button><button type="button" data-nova-aura="moonlit" class="${novaAura==='moonlit'?'selected':''}">Moonlit</button><button type="button" data-nova-aura="cyber" class="${novaAura==='cyber'?'selected':''}">Cyber</button><button type="button" data-nova-aura="ember" class="${novaAura==='ember'?'selected':''}">Ember</button></div><label>Фокус кадру</label><div class="chips"><button type="button" data-nova-focus="portrait" class="${novaFocus==='portrait'?'selected':''}">Портрет</button><button type="button" data-nova-focus="fullbody" class="${novaFocus==='fullbody'?'selected':''}">Повний зріст</button><button type="button" data-nova-focus="world" class="${novaFocus==='world'?'selected':''}">Світ персонажа</button></div>`;
+  prompt.closest('label')?.before(director);
+  director.querySelectorAll('[data-nova-aura]').forEach(button=>button.onclick=()=>{novaAura=button.dataset.novaAura;store.set('nova-director-aura',novaAura);render();});
+  director.querySelectorAll('[data-nova-focus]').forEach(button=>button.onclick=()=>{novaFocus=button.dataset.novaFocus;store.set('nova-director-focus',novaFocus);render();});
+}
+
 function installAdultCreativeControls(){
   const prompt=$('#adult-prompt');
   if(!prompt||$('#adult-creative-controls'))return;
@@ -428,6 +442,7 @@ function installAdultCreativeControls(){
 }
 
 function bind(){
+  installNovaDirector();
   installAdultCreativeControls();
   $('#generate-real-video')?.addEventListener('click',generateRealVideo);
   document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>{active=b.dataset.go;render();});

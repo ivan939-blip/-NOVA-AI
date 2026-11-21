@@ -8,6 +8,17 @@ const ADULT_TERMS = /(erotic|erotica|nude|nudity|naked|explicit|sex(?:ual)?|porn
 const PROHIBITED_ADULT_TERMS = /(minor|child|teen(?:ager)?|underage|schoolgirl|schoolboy|loli|неповноліт|дитин|підлітк|школяр)/iu;
 const MAX_SEED = 9_999_999_999;
 const STRICT_PROMPT_SUFFIX = 'Follow every explicit detail in the request exactly: subject, attributes, count, composition, colors, clothing and scene. Do not add people, text, logos, objects or style elements not requested. If a detail is unspecified, keep it simple and unobtrusive.';
+const NOVA_AURAS = {
+  violet: 'violet neon aura, deep black shadows, luminous purple highlights',
+  moonlit: 'moonlit nocturne, silver-violet glow, dark romantic atmosphere',
+  cyber: 'electric neon cyberpunk aura, rain-slick reflections, magenta and ultraviolet light',
+  ember: 'dark ember glow, crimson-violet contrast, cinematic smoke'
+};
+const NOVA_FOCUS = {
+  portrait: 'a deliberate intimate portrait composition with expressive eyes and a clean background',
+  fullbody: 'a full-length character composition with a clear, elegant silhouette',
+  world: 'an expansive environmental composition where the world is as important as the subject'
+};
 
 function requestsAdultContent(prompt) {
   // “non-explicit” describes a safe image and must not be mistaken for a request
@@ -70,6 +81,8 @@ export async function onRequestPost({ request, env }) {
   const presentation = ['feminine','masculine','unspecified'].includes(body.presentation) ? body.presentation : 'unspecified';
   const adultModel = ['feminine', 'masculine', 'androgynous', 'unspecified'].includes(body.adultModel) ? body.adultModel : 'unspecified';
   const adultStyle = ['photorealistic', 'cinematic', 'gothic'].includes(body.adultStyle) ? body.adultStyle : 'photorealistic';
+  const novaAura = NOVA_AURAS[body.novaAura] ? body.novaAura : 'violet';
+  const novaFocus = NOVA_FOCUS[body.novaFocus] ? body.novaFocus : 'portrait';
   const preserveFace = body.preserveFace === true;
   const strictPrompt = body.strictPrompt !== false;
   const seed = validSeed(body.seed);
@@ -87,7 +100,8 @@ export async function onRequestPost({ request, env }) {
       const adultInstruction = adultMode
         ? `${requestedAdultContent ? 'Depict exactly one original, fictional, consenting adult age 25 or older' : 'Depict exactly one original, fictional model character age 25 or older'}${adultModel === 'unspecified' ? ' with the presentation requested by the user' : ` with a ${adultModel} presentation`}. Use a ${adultStyle === 'photorealistic' ? 'photorealistic high-end editorial fashion photography' : adultStyle === 'cinematic' ? 'photorealistic cinematic editorial photography' : 'photorealistic dark gothic editorial photography'} aesthetic. Never depict a real person or a minor.`
         : '';
-      const modelPrompt = [adultInstruction, prompt, strictPrompt ? STRICT_PROMPT_SUFFIX : ''].filter(Boolean).join('\n\n');
+      const novaDirection = `NOVA Director: ${NOVA_AURAS[novaAura]}; ${NOVA_FOCUS[novaFocus]}.`;
+      const modelPrompt = [adultInstruction, novaDirection, prompt, strictPrompt ? STRICT_PROMPT_SUFFIX : ''].filter(Boolean).join('\n\n');
       try {
         result = await env.AI.run('@cf/black-forest-labs/flux-1-schnell', { prompt: modelPrompt, seed, steps: 4 });
       } catch (seedError) {

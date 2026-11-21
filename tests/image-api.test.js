@@ -61,6 +61,17 @@ test('returns base64 image data from FLUX with a reproducible seed', async () =>
   const body=await res.json(); assert.equal(body.image, 'data:image/jpeg;base64,YWJj'); assert.equal(body.seed,12345); assert.equal(body.strictPromptApplied,true);
 });
 
+test('adds the selected NOVA Director art direction to image generation', async () => {
+  const res = await post(JSON.stringify({ prompt: 'a masked heroine', novaAura: 'cyber', novaFocus: 'world' }), {
+    AI: { run: async (_model, options) => {
+      assert.match(options.prompt, /NOVA Director: electric neon cyberpunk aura/);
+      assert.match(options.prompt, /expansive environmental composition/);
+      return { image: 'YWJj' };
+    } }
+  });
+  assert.equal(res.status, 200);
+});
+
 test('falls back to image generation without seed only when the provider rejects seed', async () => {
   let calls=0;
   const res=await post(JSON.stringify({prompt:'moon',seed:42}),{AI:{run:async (_model,options)=>{calls++;if(options.seed)throw new Error('seed validation failed');assert.equal(options.seed,undefined);return {image:'YWJj'};}}});
