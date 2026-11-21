@@ -8,12 +8,12 @@ Mobile-first Gothic Cyberpunk AI Studio. The permanent purple-black heroine home
 - Cloudflare Pages Function for the NOVA chat API.
 - Cloudflare Workers AI integration (no OpenAI key required).
 - Image generation endpoint is implemented with Cloudflare Workers AI FLUX (deployment/limits must be verified).
-- Video idea drafts saved to the local library; video rendering is not implemented.
+- Video idea drafts can be saved locally. Optional Agnes video rendering requires an `AGNES_API_KEY` Cloudflare secret.
 - Character selection and a local 18+ mode toggle.
 - Optional Supabase sign-in and cloud library (requires a free Supabase project).
 - PWA shell and GitHub Pages design preview.
 
-Image generation is implemented in Image Studio via Cloudflare Pages Functions and Workers AI FLUX. Video Studio currently stores ideas only; actual video rendering is not implemented. Verify deployment and AI binding before relying on generation.
+Image generation is implemented in Image Studio via Cloudflare Pages Functions and Workers AI FLUX. Video Studio always supports local storyboard drafts. Its optional rendering endpoint only becomes available after adding an Agnes API key as a Cloudflare secret; without it, the UI returns a clear unavailable status.
 
 ## Free deployment: Cloudflare Pages + Workers AI
 
@@ -25,6 +25,10 @@ The repository contains a Cloudflare Pages config (`wrangler.toml`) and Pages Fu
 4. The repository's `wrangler.toml` already declares the Workers AI binding as `AI`. Because this file is the configuration source of truth, make sure the Pages project deploys with Wrangler configuration enabled and check **Settings → Bindings** if the binding is not shown.
 5. Redeploy the project. Open `https://YOUR-PROJECT.pages.dev/api/health`. It should return JSON with `"ai": true`.
 6. Open the site and test the Chat tab.
+
+### Optional video rendering
+
+The Video Studio integration uses Agnes AI and is disabled until its secret is configured. In **Settings → Variables and Secrets**, add `AGNES_API_KEY` as an encrypted secret for the required Pages environments, then redeploy. Do not put this key in a `VITE_` variable or commit it to the repository.
 
 The chat endpoint uses Cloudflare Workers AI model `@cf/zai-org/glm-4.7-flash`. Cloudflare's free plan includes a limited daily AI allowance; availability and limits are controlled by Cloudflare. Do not upgrade the account or add a payment method just for this project. If the free allowance is exhausted, the API will temporarily stop answering until it resets.
 
@@ -39,13 +43,9 @@ VITE_SUPABASE_PUBLISHABLE_KEY=<publishable-key>
 
 The publishable key is designed for browser use; never put a Supabase service-role key in frontend variables.
 
-## GitHub Pages preview
+## CI and static previews
 
-The GitHub Actions workflow still builds and publishes the static design preview at:
-
-https://ivan939-blip.github.io/-NOVA-AI/
-
-GitHub Pages cannot execute the `functions/api/` server endpoints. For working AI chat, use the Cloudflare Pages deployment above.
+GitHub Actions verifies tests and the Vite build on every push to `main`. Cloudflare Pages performs the production deployment; its Pages Functions are required for the AI endpoints. A static host such as GitHub Pages cannot execute `functions/api/`.
 
 ## Run locally
 
