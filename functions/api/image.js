@@ -83,7 +83,8 @@ export async function onRequestPost({ request, env }) {
   const adultModel = ['feminine', 'masculine', 'androgynous', 'unspecified'].includes(body.adultModel) ? body.adultModel : 'unspecified';
   const adultStyle = ['photorealistic', 'cinematic', 'gothic'].includes(body.adultStyle) ? body.adultStyle : 'photorealistic';
   const novaAura = NOVA_AURAS[body.novaAura] ? body.novaAura : 'violet';
-  const novaFocus = NOVA_FOCUS[body.novaFocus] ? body.novaFocus : 'portrait';
+  const fullBodyRequested = /(?:повн(?:ий|а|е|ого)\s+зріст|на\s+весь\s+зріст|від\s+голови\s+до\s+(?:ніг|п.?ят)|full[ -]?body|head[ -]?to[ -]?toe|entire\s+(?:body|figure))/iu.test(prompt);
+  const novaFocus = fullBodyRequested ? 'fullbody' : NOVA_FOCUS[body.novaFocus] ? body.novaFocus : 'portrait';
   const preserveFace = body.preserveFace === true;
   const strictPrompt = body.strictPrompt !== false;
   const seed = validSeed(body.seed);
@@ -101,7 +102,7 @@ export async function onRequestPost({ request, env }) {
       const adultInstruction = adultMode
         ? `${requestedAdultContent ? 'Depict exactly one original, fictional, consenting adult age 25 or older' : 'Depict exactly one original, fictional model character age 25 or older'}${adultModel === 'unspecified' ? ' with the presentation requested by the user' : ` with a ${adultModel} presentation`}. Use a ${adultStyle === 'photorealistic' ? 'photorealistic high-end editorial fashion photography' : adultStyle === 'cinematic' ? 'photorealistic cinematic editorial photography' : 'photorealistic dark gothic editorial photography'} aesthetic. Never depict a real person or a minor.`
         : '';
-      const novaDirection = `Lighting and atmosphere only, subordinate to the user's description: ${NOVA_AURAS[novaAura]}. ${NOVA_LIGHTING}`;
+      const novaDirection = strictPrompt ? '' : `Lighting and atmosphere only, subordinate to the user's description: ${NOVA_AURAS[novaAura]}. ${NOVA_LIGHTING}`;
       const priorityInstruction = 'The user description is authoritative. Never replace the requested subject or outfit with a superhero, robot, armored figure, mask, helmet, bodysuit or futuristic costume unless explicitly requested. A visual mood is lighting and background, not permission to change the subject. Respect requested full-body framing.';
       const modelPrompt = [prompt, NOVA_FOCUS[novaFocus], adultInstruction, priorityInstruction, strictPrompt ? STRICT_PROMPT_SUFFIX : '', novaDirection].filter(Boolean).join('\n\n');
       // FLUX.1 Schnell's published input schema accepts prompt and steps only.
@@ -118,6 +119,7 @@ export async function onRequestPost({ request, env }) {
       seed,
       seedApplied,
       strictPromptApplied: strictPrompt,
+      fullBodyApplied: novaFocus === 'fullbody',
       // Echo only the server-validated options; this is never inferred from the photo.
       presentationApplied: reference ? presentation : null,
       preserveFaceApplied: Boolean(reference && preserveFace)
