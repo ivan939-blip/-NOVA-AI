@@ -64,7 +64,6 @@ function unpackImage(value, id) {
 async function renderMotion(job, image) {
   await mkdir(outputDir, { recursive: true });
   const target = resolve(outputDir, `nova-${job.id}.mp4`);
-  const title = 'NOVA AI // LOCAL MOTION';
   const size = job.aspectRatio === '16:9' ? '854x480' : job.aspectRatio === '1:1' ? '640x640' : '480x854';
   const [width, height] = size.split('x');
   let args;
@@ -78,9 +77,12 @@ async function renderMotion(job, image) {
       : job.motion === 'drift'
       ? `zoompan=z='1.08+0.025*sin(on/18)':x='iw/2-(iw/zoom/2)+10*sin(on/15)':y='ih/2-(ih/zoom/2)+8*cos(on/19)':d=1:s=${size}:fps=24`
       : `zoompan=z='min(zoom+0.00075,1.12)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:s=${size}:fps=24`;
-    args = ['-y', '-loop', '1', '-i', source, '-f', 'lavfi', '-i', 'sine=frequency=55:sample_rate=44100', '-filter_complex', `[0:v]scale=${width * 2}:${height * 2}:force_original_aspect_ratio=increase,crop=${width * 2}:${height * 2},${motion},eq=contrast=1.08:saturation=1.18,fade=t=in:st=0:d=0.5,drawtext=text='${title}':fontcolor=white@0.8:fontsize=18:x=28:y=h-55[v]`, '-map', '[v]', '-map', '1:a'];
+    // Keep filters portable: some FFmpeg static builds (including Kaggle)
+    // omit drawtext/libfreetype. A text overlay is cosmetic, never a reason
+    // to fail a user's video render.
+    args = ['-y', '-loop', '1', '-i', source, '-f', 'lavfi', '-i', 'sine=frequency=55:sample_rate=44100', '-filter_complex', `[0:v]scale=${width * 2}:${height * 2}:force_original_aspect_ratio=increase,crop=${width * 2}:${height * 2},${motion},eq=contrast=1.08:saturation=1.18,fade=t=in:st=0:d=0.5[v]`, '-map', '[v]', '-map', '1:a'];
   } else {
-    args = ['-y', '-f', 'lavfi', '-i', `color=c=0x10071d:s=${size}:r=24`, '-f', 'lavfi', '-i', 'sine=frequency=55:sample_rate=44100', '-filter_complex', `[0:v]drawgrid=width=56:height=56:thickness=1:color=0x8c4dff@0.13,eq=contrast=1.12:saturation=1.3,drawtext=text='${title}':fontcolor=0xdcc8ff@0.9:fontsize=20:x=28:y=h-55[v]`, '-map', '[v]', '-map', '1:a'];
+    args = ['-y', '-f', 'lavfi', '-i', `color=c=0x10071d:s=${size}:r=24`, '-f', 'lavfi', '-i', 'sine=frequency=55:sample_rate=44100', '-filter_complex', `[0:v]drawgrid=width=56:height=56:thickness=1:color=0x8c4dff@0.13,eq=contrast=1.12:saturation=1.3[v]`, '-map', '[v]', '-map', '1:a'];
   }
   args.push('-t', String(job.seconds), '-r', '24', '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '64k', '-af', 'volume=0.035', '-movflags', '+faststart', target);
   try {
