@@ -86,7 +86,11 @@ async function renderMotion(job, image) {
 }
 
 function replaceTemplate(value, variables) {
-  if (typeof value === 'string') return value.replace(/{{([A-Z_]+)}}/g, (_, name) => String(variables[name] ?? ''));
+  if (typeof value === 'string') {
+    const exact = value.match(/^{{([A-Z_]+)}}$/);
+    if (exact && Object.hasOwn(variables, exact[1])) return variables[exact[1]];
+    return value.replace(/{{([A-Z_]+)}}/g, (_, name) => String(variables[name] ?? ''));
+  }
   if (Array.isArray(value)) return value.map(item => replaceTemplate(item, variables));
   if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, replaceTemplate(item, variables)]));
   return value;

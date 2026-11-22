@@ -42,7 +42,7 @@ The default companion CORS policy permits `https://nova-ai-7qd.pages.dev` and Vi
 NOVA can run an actual neural-video workflow without a paid API. This cannot run inside Cloudflare Pages or directly in a phone browser: video models need local GPU memory and model files.
 
 1. Install and run [ComfyUI](https://github.com/comfyanonymous/ComfyUI) on the computer that will create video. Install a Wan-compatible text-to-video or image-to-video workflow and model according to that workflow's own licence and hardware requirements.
-2. In ComfyUI, export the working workflow in **API format**. In the JSON, replace the positive prompt input with `{{PROMPT}}`. Optional placeholders are `{{NEGATIVE_PROMPT}}`, `{{WIDTH}}`, `{{HEIGHT}}`, `{{FRAMES}}`, `{{SEED}}`, and `{{IMAGE_FILENAME}}` (for a Load Image node).
+2. NOVA includes a ready API workflow for **Wan2.1 T2V 1.3B** at `comfyui/wan2.1-t2v-api.json`. It requires the matching Wan diffusion model, UMT5 text encoder, and Wan VAE. For a different ComfyUI workflow, export it in **API format** and use the placeholders `{{PROMPT}}`, `{{NEGATIVE_PROMPT}}`, `{{WIDTH}}`, `{{HEIGHT}}`, `{{FRAMES}}`, `{{SEED}}`, and `{{IMAGE_FILENAME}}` (for a Load Image node).
 3. Start the NOVA companion in the same terminal:
 
 ```powershell
