@@ -17,7 +17,7 @@ const NOVA_AURAS = {
 const NOVA_LIGHTING = 'Professional cinematic exposure: clear facial features, natural skin tones, sharp eyes, detailed requested textures, subtle softbox fill light, controlled contrast, rich blacks without crushed shadows, no underexposure, no muddy silhouettes. Preserve the requested dark gothic mood and neon palette; do not wash out the scene.';
 const NOVA_FOCUS = {
   portrait: 'a deliberate intimate portrait composition with expressive eyes and a clean background',
-  fullbody: 'MANDATORY FULL BODY HEAD-TO-TOE WIDE SHOT: show the entire character from the top of the head to the soles of both shoes, including both feet, fully inside the image frame. Do not introduce shoes, clothing, armor, masks or accessories unless requested. Leave visible breathing room above the head and below the feet. Position the camera far enough away to fit the complete standing figure. No cropped head, legs, ankles or feet; no waist-up, bust, portrait or close-up framing. The character occupies approximately 75 to 85 percent of the image height.',
+  fullbody: 'MANDATORY FULL BODY HEAD-TO-TOE WIDE SHOT: show the entire character from the top of the head to the soles of both feet, including both feet, fully inside the image frame. Do not introduce shoes, clothing, armor, masks or accessories unless requested. Leave visible breathing room above the head and below the feet. Position the camera far enough away to fit the complete standing figure. No cropped head, legs, ankles or feet; no waist-up, bust, portrait or close-up framing. The character occupies approximately 75 to 85 percent of the image height.',
   world: 'an expansive environmental composition where the world is as important as the subject'
 };
 
@@ -83,7 +83,7 @@ export async function onRequestPost({ request, env }) {
   const adultModel = ['feminine', 'masculine', 'androgynous', 'unspecified'].includes(body.adultModel) ? body.adultModel : 'unspecified';
   const adultStyle = ['photorealistic', 'cinematic', 'gothic'].includes(body.adultStyle) ? body.adultStyle : 'photorealistic';
   const novaAura = NOVA_AURAS[body.novaAura] ? body.novaAura : 'violet';
-  const fullBodyRequested = /(?:повн(?:ий|а|е|ого)\s+зріст|на\s+весь\s+зріст|від\s+голови\s+до\s+(?:ніг|п.?ят)|full[ -]?body|head[ -]?to[ -]?toe|entire\s+(?:body|figure))/iu.test(prompt);
+  const fullBodyRequested = /(?:повн(?:ий|а|е|ого)\s+зріст|(?:у|в|на)\s+повн(?:ий|ому|ім)\s+зріст|на\s+весь\s+зріст|від\s+голови\s+до\s+(?:ніг|п.?ят)|full[ -]?body|head[ -]?to[ -]?toe|entire\s+(?:body|figure))/iu.test(prompt);
   const novaFocus = fullBodyRequested ? 'fullbody' : NOVA_FOCUS[body.novaFocus] ? body.novaFocus : 'portrait';
   const preserveFace = body.preserveFace === true;
   const strictPrompt = body.strictPrompt !== false;
