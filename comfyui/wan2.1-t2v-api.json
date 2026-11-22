@@ -6,7 +6,7 @@
   "6": { "class_type": "CLIPTextEncode", "inputs": { "text": "{{PROMPT}}", "clip": ["38", 0] } },
   "7": { "class_type": "CLIPTextEncode", "inputs": { "text": "{{NEGATIVE_PROMPT}}", "clip": ["38", 0] } },
   "40": { "class_type": "EmptyHunyuanLatentVideo", "inputs": { "width": "{{WIDTH}}", "height": "{{HEIGHT}}", "length": "{{FRAMES}}", "batch_size": 1 } },
-  "3": { "class_type": "KSampler", "inputs": { "seed": "{{SEED}}", "steps": 24, "cfg": 6, "sampler_name": "uni_pc", "scheduler": "simple", "denoise": 1, "model": ["48", 0], "positive": ["6", 0], "negative": ["7", 0], "latent_image": ["40", 0] } },
+  "3": { "class_type": "KSampler", "inputs": { "seed": "{{SEED}}", "steps": "{{STEPS}}", "cfg": 6, "sampler_name": "uni_pc", "scheduler": "simple", "denoise": 1, "model": ["48", 0], "positive": ["6", 0], "negative": ["7", 0], "latent_image": ["40", 0] } },
   "8": { "class_type": "VAEDecode", "inputs": { "samples": ["3", 0], "vae": ["39", 0] } },
   "47": { "class_type": "SaveWEBM", "inputs": { "images": ["8", 0], "filename_prefix": "NOVA_Wan", "codec": "vp9", "fps": 16, "crf": 32 } }
 }

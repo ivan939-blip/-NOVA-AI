@@ -123,7 +123,7 @@ async function renderNeural(job, image) {
   const [width, height] = (job.aspectRatio === '16:9' ? '854x480' : job.aspectRatio === '1:1' ? '640x640' : '480x854').split('x');
   const workflow = replaceTemplate(template, {
     PROMPT: job.prompt, NEGATIVE_PROMPT: 'blurry, low quality, distorted, watermark, text', WIDTH: width, HEIGHT: height,
-    FRAMES: job.seconds * 16, SEED: Math.floor(Math.random() * 2_147_483_647), IMAGE_FILENAME: sourceName
+    FRAMES: job.seconds * 16, STEPS: job.steps, SEED: Math.floor(Math.random() * 2_147_483_647), IMAGE_FILENAME: sourceName
   });
   const queued = await fetch(`${comfyUrl}/prompt`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt: workflow, client_id: `nova-${job.id}` }), signal: AbortSignal.timeout(30_000) });
   if (!queued.ok) throw new Error(`COMFY_QUEUE_FAILED_${queued.status}`);
@@ -165,7 +165,7 @@ createServer(async (req, res) => {
       if ([...jobs.values()].filter(job => job.status === 'processing').length >= MAX_CONCURRENT_RENDERS) return send(res, 429, { error: 'Локальний рендер зайнятий двома завданнями. Зачекай завершення одного з них.', code: 'RENDER_QUEUE_FULL' }, origin);
       const engine = input.engine === 'motion' ? 'motion' : 'neural';
       if (engine === 'neural' && !comfyWorkflowPath) return send(res, 503, { error: 'Нейромережевий режим потребує локального ComfyUI та NOVA_COMFY_WORKFLOW. Обери Motion Forge або налаштуй безкоштовний локальний бекенд.', code: 'NEURAL_BACKEND_NOT_CONFIGURED' }, origin);
-      const id = randomUUID(); const job = { id, status: 'processing', engine, prompt, seconds: Math.max(4, Math.min(12, Number(input.seconds) || 5)), aspectRatio: ['16:9', '1:1', '9:16'].includes(input.aspect_ratio) ? input.aspect_ratio : '9:16', motion: ['push-in','pan-left','pan-right','drift'].includes(input.motion) ? input.motion : 'push-in' }; jobs.set(id, job);
+      const id = randomUUID(); const job = { id, status: 'processing', engine, prompt, seconds: Math.max(4, Math.min(12, Number(input.seconds) || 5)), steps: Math.max(4, Math.min(24, Number(input.steps) || 24)), aspectRatio: ['16:9', '1:1', '9:16'].includes(input.aspect_ratio) ? input.aspect_ratio : '9:16', motion: ['push-in','pan-left','pan-right','drift'].includes(input.motion) ? input.motion : 'push-in' }; jobs.set(id, job);
       const image = unpackImage(input.image, id);
       (engine === 'neural' ? renderNeural(job, image) : renderMotion(job, image)).catch(error => { console.error(error); job.status = 'failed'; job.error = error.message === 'NEURAL_BACKEND_NOT_CONFIGURED' ? 'Нейромережевий бекенд не налаштований.' : engine === 'neural' ? 'ComfyUI не створив відео. Перевір запущений сервер і workflow.' : 'Не вдалося зібрати MP4 локально.'; setTimeout(() => jobs.delete(id), RESULT_TTL_MS); });
       return send(res, 202, { video_id: id, provider: engine === 'neural' ? 'local-comfyui-neural' : 'local-motion-forge' }, origin);
