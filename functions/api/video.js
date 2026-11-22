@@ -40,7 +40,13 @@ export async function onRequest({ request, env }) {
     if (media) return new Response(response.body, { status: response.status, headers: { 'Content-Type': response.headers.get('Content-Type') || 'video/webm', ...noStore } });
     const body = await response.text();
     let data;
-    try { data = JSON.parse(body); } catch { return Response.json({ error: 'Відеосервер повернув некоректну відповідь.', code: 'VIDEO_BACKEND_INVALID_RESPONSE' }, { status: 502, headers: noStore }); }
+    try { data = JSON.parse(body); } catch {
+      const tunnelFailure = response.status >= 500 || /text\/html/i.test(response.headers.get('Content-Type') || '');
+      return Response.json({
+        error: tunnelFailure ? 'Захищений відеотунель тимчасово недоступний. Спробуй пізніше або використай Motion Forge.' : 'Відеосервер повернув некоректну відповідь.',
+        code: tunnelFailure ? 'VIDEO_BACKEND_TUNNEL_UNAVAILABLE' : 'VIDEO_BACKEND_INVALID_RESPONSE'
+      }, { status: 502, headers: noStore });
+    }
     if (data.video_url && response.ok) {
       const publicUrl = new URL(request.url);
       publicUrl.search = '';
