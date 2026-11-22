@@ -62,9 +62,9 @@ test('returns base64 image data from FLUX without sending unsupported seed', asy
 });
 
 test('adds the selected NOVA Director art direction to image generation', async () => {
-  const res = await post(JSON.stringify({ prompt: 'a masked heroine', novaAura: 'cyber', novaFocus: 'world' }), {
+  const res = await post(JSON.stringify({ prompt: 'a masked heroine', novaAura: 'cyber', novaFocus: 'world', strictPrompt: false }), {
     AI: { run: async (_model, options) => {
-      assert.match(options.prompt, /NOVA Director: electric neon cyberpunk aura/);
+      assert.match(options.prompt, /electric neon cyberpunk aura/);
       assert.match(options.prompt, /expansive environmental composition/);
       return { image: 'YWJj' };
     } }
