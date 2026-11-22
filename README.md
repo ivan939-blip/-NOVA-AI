@@ -53,6 +53,10 @@ npm run video:local
 
 4. In Video Studio choose **Нейромережа**. NOVA uploads the current Image Studio result only to local ComfyUI when the selected workflow uses `{{IMAGE_FILENAME}}`; generated MP4 files are retained for 24 hours locally.
 
+### Temporary remote GPU companion
+
+The Pages function can securely proxy a temporary GPU companion without putting its access token in the browser. Set `NOVA_VIDEO_BACKEND_URL` and `NOVA_VIDEO_BACKEND_TOKEN` as Cloudflare Pages secrets, then start the companion with the same `NOVA_VIDEO_TOKEN`. The companion must be exposed through an authenticated tunnel; Kaggle sessions and their GPU runtimes are temporary, so this is not permanent hosting.
+
 If ComfyUI or its workflow is unavailable, NOVA shows a clear configuration error; it does not pretend that Motion Forge is a neural model. Choose **Motion Forge** for the CPU-only fallback. To use the companion from a phone, serve it from a trusted computer on the same local network and set `VITE_LOCAL_VIDEO_API_URL` to that computer's HTTPS/LAN endpoint before building the Android app.
 
 The chat endpoint uses Cloudflare Workers AI model `@cf/zai-org/glm-4.7-flash`. Cloudflare's free plan includes a limited daily AI allowance; availability and limits are controlled by Cloudflare. Do not upgrade the account or add a payment method just for this project. If the free allowance is exhausted, the API will temporarily stop answering until it resets.

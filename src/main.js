@@ -80,7 +80,7 @@ if(!Array.isArray(workActionQueue)) workActionQueue=[];
 let workDesktopApps = [];
 let workPendingApp = '';
 let workVoiceListening = false;
-const localVideoApi = (import.meta.env.VITE_LOCAL_VIDEO_API_URL || 'http://127.0.0.1:8189/api/video').replace(/\/$/, '');
+const localVideoApi = (import.meta.env.VITE_LOCAL_VIDEO_API_URL || '/api/video').replace(/\/$/, '');
 
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 const nativeVoice = () => Boolean(window.NovaVoice);

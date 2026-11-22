@@ -15,6 +15,7 @@ const RESULT_TTL_MS = 24 * 60 * 60 * 1_000;
 const MAX_CONCURRENT_RENDERS = 2;
 const comfyUrl = (process.env.NOVA_COMFYUI_URL || 'http://127.0.0.1:8188').replace(/\/$/, '');
 const comfyWorkflowPath = process.env.NOVA_COMFY_WORKFLOW || '';
+const backendToken = process.env.NOVA_VIDEO_TOKEN || '';
 
 function send(res, status, body, origin) {
   const headers = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' };
@@ -28,6 +29,11 @@ function allowed(req, res) {
     res.writeHead(204, { 'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type' }); res.end(); return true;
   }
   if (origin && !allowedOrigins.has(origin)) { send(res, 403, { code: 'ORIGIN_FORBIDDEN' }, origin); return true; }
+  return false;
+}
+function authorized(req, res, origin) {
+  if (!backendToken || req.headers.authorization === `Bearer ${backendToken}`) return true;
+  send(res, 401, { error: 'Потрібна авторизація відеосервера.', code: 'VIDEO_AUTH_REQUIRED' }, origin);
   return false;
 }
 async function parseBody(req) {
@@ -158,6 +164,7 @@ createServer(async (req, res) => {
   const url = new URL(req.url, `http://${host}:${port}`);
   try {
     if (url.pathname === '/health') return send(res, 200, { app: 'NOVA Local Video', api: 'online', engine: 'FFmpeg', neural: Boolean(comfyWorkflowPath), neuralEngine: comfyWorkflowPath ? 'ComfyUI workflow' : 'not configured' }, origin);
+    if (!authorized(req, res, origin)) return;
     if (url.pathname === '/api/video' && req.method === 'POST') {
       const input = await parseBody(req); const prompt = typeof input?.prompt === 'string' ? input.prompt.trim() : '';
       if (!prompt) return send(res, 400, { error: 'Опиши відео.', code: 'PROMPT_REQUIRED' }, origin);
