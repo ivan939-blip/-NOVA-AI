@@ -72,6 +72,29 @@ test('adds the selected NOVA Director art direction to image generation', async 
   assert.equal(res.status, 200);
 });
 
+test('preserves a requested English human subject without replacing her with a fantasy figure', async () => {
+  for (const prompt of ['a woman standing in a castle', 'full-body female character']) {
+    const res = await post(JSON.stringify({ prompt }), {
+      AI: { run: async (_model, options) => {
+        assert.match(options.prompt, /SUBJECT IDENTITY LOCK/);
+        assert.match(options.prompt, /normal human face/);
+        return { image: 'YWJj' };
+      } }
+    });
+    assert.equal(res.status, 200);
+  }
+});
+
+test('does not add the human-subject instruction to unrelated words', async () => {
+  const res = await post(JSON.stringify({ prompt: 'a womanhood symbol on a castle wall' }), {
+    AI: { run: async (_model, options) => {
+      assert.doesNotMatch(options.prompt, /SUBJECT IDENTITY LOCK/);
+      return { image: 'YWJj' };
+    } }
+  });
+  assert.equal(res.status, 200);
+});
+
 test('does not send unsupported seed to FLUX Schnell', async () => {
   let calls=0;
   const res=await post(JSON.stringify({prompt:'moon',seed:42}),{AI:{run:async (_model,options)=>{
