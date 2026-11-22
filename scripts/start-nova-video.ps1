@@ -1,9 +1,12 @@
 [CmdletBinding()]
 param(
-  [string]$ProjectRoot = (Split-Path $PSScriptRoot -Parent)
+  [string]$ProjectRoot = ''
 )
 
 $ErrorActionPreference = 'Stop'
+if ([string]::IsNullOrWhiteSpace($ProjectRoot)) {
+  $ProjectRoot = Split-Path $PSScriptRoot -Parent
+}
 $configPath = Join-Path $PSScriptRoot 'nova-video-config.ps1'
 
 if (Test-Path -LiteralPath $configPath) {
@@ -62,6 +65,6 @@ if (Test-NovaPort $videoPort) {
 $node = (Get-Command node -ErrorAction Stop).Source
 $env:NOVA_VIDEO_PORT = "$videoPort"
 $env:NOVA_COMFYUI_URL = "http://127.0.0.1:$comfyPort"
-$env:NOVA_COMFY_WORKFLOW = $workflow
+$env:NOVA_COMFY_WORKFLOW = if ($skipComfy) { '' } else { $workflow }
 Start-Process -FilePath $node -ArgumentList 'local-video-server.mjs' -WorkingDirectory $ProjectRoot -WindowStyle Hidden -RedirectStandardOutput (Join-Path $logRoot 'video-server.out.log') -RedirectStandardError (Join-Path $logRoot 'video-server.err.log')
 Write-Output "Started NOVA Video Server on http://127.0.0.1:$videoPort."
