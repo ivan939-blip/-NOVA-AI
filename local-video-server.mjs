@@ -106,7 +106,9 @@ async function uploadComfyImage(image) {
 }
 function videoOutput(outputs) {
   for (const output of Object.values(outputs || {})) {
-    for (const key of ['gifs', 'videos']) {
+    // ComfyUI output nodes do not use one fixed key: SaveWEBM commonly
+    // returns `images`, while video helper nodes use `gifs` or `videos`.
+    for (const key of ['gifs', 'videos', 'images']) {
       const item = output?.[key]?.[0];
       if (item?.filename) return item;
     }
