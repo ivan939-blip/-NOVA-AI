@@ -14,8 +14,12 @@ function backendUrl(base, request, media) {
   if (media) {
     const remote = new URL(media);
     const expected = new URL(base);
-    if (remote.origin !== expected.origin || !remote.pathname.startsWith('/media/')) throw new Error('INVALID_REMOTE_MEDIA');
-    return remote.toString();
+    const localCompanionUrl = ['127.0.0.1', 'localhost'].includes(remote.hostname);
+    if ((!localCompanionUrl && remote.origin !== expected.origin) || !remote.pathname.startsWith('/media/')) throw new Error('INVALID_REMOTE_MEDIA');
+    // The companion can only know its loopback address.  Never fetch that
+    // address from the Worker: map its validated media path to the configured
+    // public tunnel instead.
+    return new URL(`${remote.pathname}${remote.search}`, expected).toString();
   }
   const requestUrl = new URL(request.url);
   const target = new URL(`${base}/api/video`);
