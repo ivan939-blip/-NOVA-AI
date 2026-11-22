@@ -1,0 +1,12 @@
+# Copy this file to nova-video-config.ps1 and update paths for this PC.
+# The real config is ignored by Git, so never store a tunnel token in the repo.
+
+$NOVA_COMFYUI_ROOT = 'C:\ComfyUI'
+$NOVA_COMFYUI_PORT = 8188
+$NOVA_VIDEO_PORT = 8189
+
+# Set to $true when only the CPU Motion Forge fallback is wanted.
+$NOVA_SKIP_COMFYUI = $false
+
+# Use the included Wan API workflow unless a custom API-format workflow is needed.
+$NOVA_COMFY_WORKFLOW = Join-Path $PSScriptRoot '..\comfyui\wan2.1-t2v-api.json'

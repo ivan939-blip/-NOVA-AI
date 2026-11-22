@@ -53,6 +53,18 @@ npm run video:local
 
 4. In Video Studio choose **Нейромережа**. NOVA uploads the current Image Studio result only to local ComfyUI when the selected workflow uses `{{IMAGE_FILENAME}}`; generated MP4 files are retained for 24 hours locally.
 
+### Windows autostart for the local video server
+
+This is for a computer that stays on and has ComfyUI plus the models installed locally. It cannot keep a temporary Kaggle GPU session alive after the computer is switched off.
+
+1. Run `npm ci` once in the project directory.
+2. Copy `scripts/nova-video-config.ps1.example` to `scripts/nova-video-config.ps1` and set the local ComfyUI path. The real config is ignored by Git.
+3. Test it manually: `powershell -ExecutionPolicy Bypass -File scripts/start-nova-video.ps1`.
+4. Review without changing Windows: `powershell -ExecutionPolicy Bypass -File scripts/install-nova-video-autostart.ps1`.
+5. Enable autostart after the manual test passes: `powershell -ExecutionPolicy Bypass -File scripts/install-nova-video-autostart.ps1 -Install`.
+
+The task runs only after the current Windows user signs in, starts no public tunnel, and writes logs to `%LOCALAPPDATA%\NOVA-AI\logs`. Remove it with `-Remove`.
+
 ### Temporary remote GPU companion
 
 The Pages function can securely proxy a temporary GPU companion without putting its access token in the browser. Set `NOVA_VIDEO_BACKEND_URL` and `NOVA_VIDEO_BACKEND_TOKEN` as Cloudflare Pages secrets, then start the companion with the same `NOVA_VIDEO_TOKEN`. The companion must be exposed through an authenticated tunnel; Kaggle sessions and their GPU runtimes are temporary, so this is not permanent hosting.

@@ -7,3 +7,4 @@ release/
 release-verify/
 .env
 .env.local
+scripts/nova-video-config.ps1
