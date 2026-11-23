@@ -34,8 +34,15 @@ function validSeed(value) {
 
 function imageDataUrl(result) {
   const encodedImage = typeof result?.image === 'string' ? result.image : typeof result === 'string' ? result : null;
-  if (encodedImage) return encodedImage.startsWith('data:image/') ? encodedImage : 'data:image/jpeg;base64,' + encodedImage;
-  return null;
+  if (encodedImage === null) return null;
+  // Workers AI may return a base64 string or a complete image data URL.
+  // Reject error strings and malformed payloads instead of reporting a broken image as success.
+  const dataUrl = /^data:image\/(?:png|jpeg|webp);base64,([A-Za-z0-9+/]+={0,2})$/i.exec(encodedImage);
+  const base64 = dataUrl ? dataUrl[1] : encodedImage;
+  if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(base64) || !base64) {
+    throw new Error('Invalid image output encoding');
+  }
+  return dataUrl ? encodedImage : 'data:image/jpeg;base64,' + base64;
 }
 async function outputDataUrl(result) {
   const direct = imageDataUrl(result); if (direct) return direct;
