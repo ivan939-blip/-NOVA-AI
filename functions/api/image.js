@@ -32,10 +32,23 @@ function validSeed(value) {
   return Number.isInteger(seed) && seed >= 1 && seed <= MAX_SEED ? seed : Math.floor(Math.random() * MAX_SEED) + 1;
 }
 
+function imageMime(data) {
+  const starts = (signature, offset = 0) => signature.every((byte, i) => data[offset + i] === byte);
+  if (data.length >= 24 && starts([137,80,78,71,13,10,26,10]) && starts([73,72,68,82],12)) return 'image/png';
+  if (data.length >= 4 && starts([255,216,255]) && starts([255,217],data.length-2)) return 'image/jpeg';
+  if (data.length >= 16 && starts([82,73,70,70]) && starts([87,69,66,80],8)) return 'image/webp';
+  throw new Error('Unrecognized image output format');
+}
 function imageDataUrl(result) {
   const encodedImage = typeof result?.image === 'string' ? result.image : typeof result === 'string' ? result : null;
-  if (encodedImage) return encodedImage.startsWith('data:image/') ? encodedImage : 'data:image/jpeg;base64,' + encodedImage;
-  return null;
+  if (encodedImage === null) return null;
+  const dataUrl = /^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/]+={0,2})$/i.exec(encodedImage);
+  const base64 = dataUrl ? dataUrl[2] : encodedImage;
+  if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(base64) || !base64) throw new Error('Malformed image output encoding');
+  const data = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+  const mime = imageMime(data);
+  if (dataUrl && dataUrl[1].toLowerCase() !== mime) throw new Error('Mismatched image output format');
+  return 'data:' + mime + ';base64,' + base64;
 }
 async function outputDataUrl(result) {
   const direct = imageDataUrl(result); if (direct) return direct;
@@ -45,7 +58,7 @@ async function outputDataUrl(result) {
   const data = bytes instanceof ArrayBuffer ? new Uint8Array(bytes) : new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   if (!data.length) throw new Error('Empty image output');
   let binary = ''; for (let i = 0; i < data.length; i += 0x8000) binary += String.fromCharCode(...data.subarray(i, i + 0x8000));
-  return 'data:image/png;base64,' + btoa(binary);
+  return 'data:' + imageMime(data) + ';base64,' + btoa(binary);
 }
 function decodeReference(value) {
   const match = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(value || '');
